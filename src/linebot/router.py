@@ -39,11 +39,11 @@ async def handle_callback(
 
     for event in events:
         user_id = event.source.user_id
-        
+
         if isinstance(event, PostbackEvent):
             logger.info("[Postback] UserId: %s | Data: %s", user_id, event.postback.data)
             data = dict(parse_qsl(event.postback.data))
-            
+
             if data.get('action') == 'next_page':
                 state = get_search_state(user_id)
                 if not state:
@@ -54,20 +54,18 @@ async def handle_callback(
                         )
                     )
                     continue
-                
+
                 try:
                     offset = int(data.get('offset', 0))
-                    logger.debug("Fetching next page with offset: %d", offset)
                     doctors, stats = search_doctor(
                         state['name'],
                         state['city'],
                         db,
                         offset=offset
                     )
-                    logger.info("Doctor: %s | stats: %s", doctors, stats)
-                    
+
                     popo_result = create_search_response(doctors, stats, state)
-                    logger.info("PoPo Result: %s", popo_result)
+
                     await line_bot_api.reply_message(
                         ReplyMessageRequest(
                             reply_token=event.reply_token,
@@ -79,7 +77,7 @@ async def handle_callback(
                     await line_bot_api.reply_message(
                         ReplyMessageRequest(
                             reply_token=event.reply_token,
-                            messages=[TextMessage(text=f"抱歉，處理分頁請求錯誤: {str(e)}")]
+                            messages=[TextMessage(text=f"抱歉，處理分頁請求錯誤")]
                         )
                     )
         if not isinstance(event, MessageEvent) or not isinstance(event.message, TextMessageContent):
@@ -136,8 +134,6 @@ async def handle_callback(
 
         popo_doctors, stats = search_doctor(name, city, db)
         popo_result = create_search_response(popo_doctors, stats, {'name': name, 'city': city})
-        
-        logger.info("PoPo Result: %s", popo_result)
 
         await line_bot_api.reply_message(
             ReplyMessageRequest(reply_token=event.reply_token, messages=popo_result)
