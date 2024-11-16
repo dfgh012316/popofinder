@@ -7,11 +7,12 @@ from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import ReplyMessageRequest
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from src.database.connection import get_db
+from src.infra.logger import get_logger
 from .dependencies import get_line_bot_api, parser
 from .services import search_doctor
 from .message_templates.doctor_template import create_flex_message
 
-
+logger = get_logger('linebot')
 router = APIRouter()
 
 
@@ -32,6 +33,7 @@ async def handle_callback(
     try:
         events = parser.parse(body, signature)
     except InvalidSignatureError as exc:
+        logger.error("Invalid signature in request")
         raise HTTPException(status_code=400, detail="Invalid signature") from exc
 
     for event in events:
@@ -39,6 +41,12 @@ async def handle_callback(
             continue
         if not isinstance(event.message, TextMessageContent):
             continue
+
+        user_id = event.source.user_id
+
+        logger.info(
+            "[Request] UserId: %s | Message: %s",user_id, event.message.text
+        )
 
         if event.message.text.strip() in ["Report", "report", "回報", "回報波波", "波波回報"]:
             return "OK"
