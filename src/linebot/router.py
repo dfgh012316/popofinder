@@ -1,6 +1,7 @@
 """
 LINEBOT Router
 """
+
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Request, HTTPException, Depends
 from linebot.v3.exceptions import InvalidSignatureError
@@ -12,7 +13,7 @@ from .dependencies import get_line_bot_api, parser
 from .services import search_doctor
 from .message_templates.doctor_template import create_flex_message
 
-logger = get_logger('linebot')
+logger = get_logger("linebot")
 router = APIRouter()
 
 
@@ -43,21 +44,52 @@ async def handle_callback(
             continue
 
         user_id = event.source.user_id
+        message = event.message.text.strip()
 
-        logger.info(
-            "[Request] UserId: %s | Message: %s",user_id, event.message.text
-        )
+        logger.info("[Request] UserId: %s | Message: %s", user_id, event.message.text)
 
-        if event.message.text.strip() in ["Report", "report", "回報", "回報波波", "波波回報"]:
+        if event.message.text.strip() in [
+            "Report",
+            "report",
+            "回報",
+            "回報波波",
+            "波波回報",
+        ]:
             return "OK"
 
-        popo_doctors = search_doctor(event.message.text, db)
+        city = None
+        name = message
+        cities = [
+            "南投",
+            "台中",
+            "台北",
+            "台南",
+            "台東",
+            "嘉義",
+            "基隆",
+            "宜蘭",
+            "屏東",
+            "彰化",
+            "新北",
+            "新竹",
+            "桃園",
+            "花蓮",
+            "苗栗",
+            "雲林",
+            "高雄",
+        ]
+        
+        for c in cities:
+            if message.startswith(c):
+                city = c
+                name = message[len(c):].strip()
+                break
+
+        popo_doctors = search_doctor(name, city, db)
         popo_result = create_flex_message(popo_doctors)
 
         await line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token, messages=[popo_result]
-            )
+            ReplyMessageRequest(reply_token=event.reply_token, messages=[popo_result])
         )
 
     return "OK"
