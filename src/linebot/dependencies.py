@@ -1,6 +1,7 @@
 """
 LINEBOT Dependencies
 """
+
 import sys
 from linebot.v3 import WebhookParser
 from linebot.v3.messaging import (
@@ -10,17 +11,21 @@ from linebot.v3.messaging import (
 )
 from src.config import settings
 
+
 class LineBotApiWrapper:
     "Linebot Api Wrapper"
+
     def __init__(self):
         if settings.LINE_MESSAGE_CHANNEL_SECRET is None:
-            print('Specify LINE_CHANNEL_SECRET as environment variable.')
+            print("Specify LINE_CHANNEL_SECRET as environment variable.")
             sys.exit(1)
         if settings.LINE_MESSAGE_CHANNEL_TOKEN is None:
-            print('Specify LINE_CHANNEL_ACCESS_TOKEN as environment variable.')
+            print("Specify LINE_CHANNEL_ACCESS_TOKEN as environment variable.")
             sys.exit(1)
 
-        self.configuration = Configuration(access_token=settings.LINE_MESSAGE_CHANNEL_TOKEN)
+        self.configuration = Configuration(
+            access_token=settings.LINE_MESSAGE_CHANNEL_TOKEN
+        )
         self.async_api_client = None
         self.async_messaging_api = None
 
@@ -38,8 +43,10 @@ class LineBotApiWrapper:
             self.async_api_client = None
             self.async_messaging_api = None
 
+
 line_bot_api_wrapper = LineBotApiWrapper()
 parser = WebhookParser(settings.LINE_MESSAGE_CHANNEL_SECRET)
+
 
 async def get_line_bot_api():
     "Get linebot api"

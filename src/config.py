@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     """
     Settings
     """
+
     ENVIRONMENT: str
 
     @property
