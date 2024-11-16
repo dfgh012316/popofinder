@@ -1,7 +1,5 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Enum, DateTime
-from sqlalchemy.sql import func
 import enum
+from sqlalchemy import Column, Integer, String, Enum
 from .base import Base
 
 class GraduationStatus(enum.Enum):

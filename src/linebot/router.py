@@ -1,16 +1,16 @@
 """
 LINEBOT Router
 """
-
-from fastapi import APIRouter, Request, HTTPException, Depends
-from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import ReplyMessageRequest, TextMessage
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .dependencies import get_line_bot_api, parser
+from fastapi import APIRouter, Request, HTTPException, Depends
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from src.database.connection import get_db
-from src.database.models.popo import MedicalPersonnel
+from src.database.models.medical_personnel import MedicalPersonnel
+from .dependencies import get_line_bot_api, parser
+
 
 router = APIRouter()
 
@@ -22,24 +22,165 @@ def search_doctor(name: str, db: Session) -> list:
     query = (
         select(MedicalPersonnel)
         .where(MedicalPersonnel.name.ilike(f"%{name}%"))
-        .limit(5)
-    )  # 限制返回數量避免訊息太長
+        .limit(10)
+    )
 
     result = db.execute(query)
     return result.scalars().all()
 
 
-def format_doctor_info(doctor: MedicalPersonnel) -> str:
+def create_doctor_bubble(doctor: MedicalPersonnel) -> dict:
     """
-    格式化醫生資訊
+    為每個醫生創建一個 bubble 容器
     """
-    return (
-        f"姓名: {doctor.name}\n"
-        f"縣市: {doctor.city}\n"
-        f"醫院: {doctor.hospital}\n"
-        f"科別: {doctor.department or '未提供'}\n"
-        f"學歷: {doctor.education or '未提供'}\n"
-        "-------------------"
+    return {
+        "type": "bubble",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": doctor.name,
+                    "size": "xl",
+                    "weight": "bold",
+                    "color": "#4A4A4A"
+                }
+            ],
+            "backgroundColor": "#F0F8FF"
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "縣市",
+                            "size": "sm",
+                            "color": "#666666",
+                            "flex": 2
+                        },
+                        {
+                            "type": "text",
+                            "text": doctor.city or "未提供",
+                            "size": "sm",
+                            "color": "#4A4A4A",
+                            "flex": 4
+                        }
+                    ],
+                    "spacing": "md"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "醫院",
+                            "size": "sm",
+                            "color": "#666666",
+                            "flex": 2
+                        },
+                        {
+                            "type": "text",
+                            "text": doctor.hospital or "未提供",
+                            "size": "sm",
+                            "color": "#4A4A4A",
+                            "flex": 4,
+                            "wrap": True
+                        }
+                    ],
+                    "spacing": "md",
+                    "margin": "md"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "科別",
+                            "size": "sm",
+                            "color": "#666666",
+                            "flex": 2
+                        },
+                        {
+                            "type": "text",
+                            "text": doctor.department or "未提供",
+                            "size": "sm",
+                            "color": "#4A4A4A",
+                            "flex": 4
+                        }
+                    ],
+                    "spacing": "md",
+                    "margin": "md"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "學歷",
+                            "size": "sm",
+                            "color": "#666666",
+                            "flex": 2
+                        },
+                        {
+                            "type": "text",
+                            "text": doctor.education or "未提供",
+                            "size": "sm",
+                            "color": "#4A4A4A",
+                            "flex": 4,
+                            "wrap": True
+                        }
+                    ],
+                    "spacing": "md",
+                    "margin": "md"
+                }
+            ],
+            "backgroundColor": "#FFFFFF"
+        }
+    }
+
+
+def create_flex_message(doctors: list[MedicalPersonnel]) -> FlexMessage:
+    """
+    創建 Flex Message
+    """
+    if not doctors:
+        # 當沒有搜尋結果時的訊息
+        contents = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "找不到相關資料",
+                        "size": "lg",
+                        "weight": "bold",
+                        "align": "center",
+                        "color": "#666666"
+                    }
+                ]
+            }
+        }
+    else:
+        # 當有搜尋結果時，創建 carousel 容器
+        contents = {
+            "type": "carousel",
+            "contents": [create_doctor_bubble(doctor) for doctor in doctors]
+        }
+
+    return FlexMessage(
+        alt_text=f"找到 {len(doctors)} 筆相關資料" if doctors else "找不到相關資料",
+        contents=FlexContainer.from_dict(contents)
     )
 
 
@@ -68,17 +209,15 @@ async def handle_callback(
         if not isinstance(event.message, TextMessageContent):
             continue
 
-        doctors = search_doctor(event.message.text, db)
+        if event.message.text.strip() in ["Report", "report", "回報", "回報波波", "波波回報"]:
+            return "OK"
 
-        if not doctors:
-            reply_text = f"找不到與 {event.message.text} 相關的資料"
-        else:
-            reply_text = f"找到 {len(doctors)} 筆相關的資料 \n"
-            reply_text += "\n".join(format_doctor_info(doctor) for doctor in doctors)
+        doctors = search_doctor(event.message.text, db)
+        flex_message = create_flex_message(doctors)
 
         await line_bot_api.reply_message(
             ReplyMessageRequest(
-                reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]
+                reply_token=event.reply_token, messages=[flex_message]
             )
         )
 
