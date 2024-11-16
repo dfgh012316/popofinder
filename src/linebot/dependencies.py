@@ -3,6 +3,8 @@ LINEBOT Dependencies
 """
 
 import sys
+from collections import defaultdict
+from datetime import datetime, timedelta
 from linebot.v3 import WebhookParser
 from linebot.v3.messaging import (
     Configuration,
@@ -11,6 +13,7 @@ from linebot.v3.messaging import (
 )
 from src.config import settings
 
+search_states = defaultdict(dict)
 
 class LineBotApiWrapper:
     "Linebot Api Wrapper"
@@ -51,3 +54,28 @@ parser = WebhookParser(settings.LINE_MESSAGE_CHANNEL_SECRET)
 async def get_line_bot_api():
     "Get linebot api"
     return await line_bot_api_wrapper.get_api()
+
+def get_search_state(user_id: str) -> dict:
+    """
+    獲取使用者搜尋狀態
+    """
+    
+    current_time = datetime.now()
+    expired_users = [
+        uid for uid, state in search_states.items()
+        if state.get('timestamp', current_time) < current_time - timedelta(minutes=30)
+    ]
+    
+    for uid in expired_users:
+        del search_states[uid]
+    
+    return search_states[user_id]
+
+def update_search_state(user_id: str, state: dict):
+    """
+    更新使用者搜尋狀態
+    """
+    
+    state['timestamp'] = datetime.now()
+    search_states[user_id] = state
+
