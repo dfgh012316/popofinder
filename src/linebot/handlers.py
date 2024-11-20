@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer
 from linebot.v3.webhooks import PostbackEvent, MessageEvent, TextMessageContent
 from src.infra.logger import get_logger
-from .services import search_doctor
+from .services import search_doctor, parse_search_criteria, format_search_summary, SearchCriteria
 from .message_templates.doctor_template import create_flex_message
 from .dependencies import get_search_state, update_search_state
 
@@ -43,19 +43,17 @@ async def handle_next_page(event, line_bot_api, db, user_id, data):
 
     try:
         offset = int(data.get('offset', 0))
-        doctors, stats = search_doctor(
-            state['name'],
-            state['city'],
-            db,
-            offset=offset
+        search_criteria = parse_search_criteria(
+            f"{state.get('city', '')} {state.get('search_term', '')}"
         )
+        doctors, stats = search_doctor(search_criteria, db, offset=offset)
 
-        popo_result = create_search_response(doctors, stats, state)
+        messages = create_search_response(doctors, stats, search_criteria)
 
         await line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=popo_result
+                messages=messages
             )
         )
     except Exception as e:
@@ -86,18 +84,19 @@ async def handle_message_event(
     if message.lower() in ["report", "help", "回報", "回報波波", "波波回報", "幫助"]:
         return
 
-    city, name = parse_location_and_name(message)
+    search_criteria = parse_search_criteria(message)
 
     update_search_state(user_id, {
-        'name': name,
-        'city': city
+        'search_term': search_criteria.search_term,
+        'city': search_criteria.city,
+        'search_type': search_criteria.search_type.value
     })
 
-    popo_doctors, stats = search_doctor(name, city, db)
-    popo_result = create_search_response(popo_doctors, stats, {'name': name, 'city': city})
+    doctors, stats = search_doctor(search_criteria, db)
+    messages = create_search_response(doctors, stats, search_criteria)
 
     await line_bot_api.reply_message(
-        ReplyMessageRequest(reply_token=event.reply_token, messages=popo_result)
+        ReplyMessageRequest(reply_token=event.reply_token, messages=messages)
     )
 
 def parse_location_and_name(message: str) -> tuple[str | None, str]:
@@ -116,20 +115,14 @@ def parse_location_and_name(message: str) -> tuple[str | None, str]:
 
     return None, message
 
-def create_search_response(doctors: list, stats: dict, state: dict) -> list:
+def create_search_response(doctors: list, stats: dict, criteria: SearchCriteria) -> list:
     """
     創建搜尋回應訊息
     """
     messages = []
 
-    # 添加搜尋統計訊息
-    location_text = f"在{state['city']}" if state['city'] else "全台"
-    current_range = f"{stats['current_page']*10-9} - {min(stats['current_page']*10, stats['total_count'])}"
-
-    summary_text = (
-        f"查詢到{location_text}共有 {stats['total_count']} 筆符合的結果\n"
-        f"目前顯示第 {current_range} 筆"
-    )
+    # 使用 format_search_summary 來生成搜尋統計訊息
+    summary_text = format_search_summary(criteria, stats)
     messages.append(TextMessage(text=summary_text))
 
     # 添加搜尋結果
