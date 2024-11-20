@@ -4,10 +4,11 @@ Handle Linebot Event
 from urllib.parse import parse_qsl
 from sqlalchemy.orm import Session
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer
-from linebot.v3.webhooks import PostbackEvent, MessageEvent, TextMessageContent
+from linebot.v3.webhooks import PostbackEvent, MessageEvent, TextMessageContent, FollowEvent
 from src.infra.logger import get_logger
 from .services import search_doctor, parse_search_criteria, format_search_summary, SearchCriteria
 from .message_templates.doctor_template import create_flex_message
+from .message_templates.help_template import create_help_message
 from .dependencies import get_search_state, update_search_state
 
 logger = get_logger("linebot")
@@ -81,7 +82,16 @@ async def handle_message_event(
 
     logger.info("[Request] UserId: %s | Message: %s", user_id, message)
 
-    if message.lower() in ["report", "help", "回報", "回報波波", "波波回報", "幫助"]:
+    if message.lower() in ["report", "回報", "回報波波", "波波回報"]:
+        return
+
+    if message.lower() in ["幫助", "help"]:
+        await line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[create_help_message()]
+            )
+        )
         return
 
     search_criteria = parse_search_criteria(message)
