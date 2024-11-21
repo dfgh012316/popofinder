@@ -6,12 +6,30 @@ from sqlalchemy.orm import Session
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer
 from linebot.v3.webhooks import PostbackEvent, MessageEvent, TextMessageContent, FollowEvent
 from src.infra.logger import get_logger
-from .services import search_doctor, parse_search_criteria, format_search_summary, SearchCriteria
+from .services import search_doctor, parse_search_criteria, format_search_summary, SearchCriteria, SearchType
 from .message_templates.doctor_template import create_flex_message
 from .message_templates.help_template import create_help_message
 from .dependencies import get_search_state, update_search_state
 
 logger = get_logger("linebot")
+
+async def handle_follow_event(
+    event: FollowEvent,
+    line_bot_api
+) -> None:
+    """
+    處理 FollowEvent
+    """
+
+    user_id = event.source.user_id
+    logger.info("[Follow] UserId: %s", user_id)
+
+    await line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[create_help_message()]
+        )
+    )
 
 async def handle_postback_event(
     event: PostbackEvent,
@@ -44,8 +62,10 @@ async def handle_next_page(event, line_bot_api, db, user_id, data):
 
     try:
         offset = int(data.get('offset', 0))
-        search_criteria = parse_search_criteria(
-            f"{state.get('city', '')} {state.get('search_term', '')}"
+        search_criteria = SearchCriteria(
+            search_type=SearchType(state.get('search_type', 'name')),
+            search_term=state.get('search_term', ''),
+            city=state.get('city')
         )
         doctors, stats = search_doctor(search_criteria, db, offset=offset)
 
