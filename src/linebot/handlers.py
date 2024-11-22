@@ -55,7 +55,7 @@ async def handle_next_page(event, line_bot_api, db, user_id, data):
         await line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                message=[TextMessage(text="搜尋已過期,請重新搜尋")]
+                messages=[TextMessage(text="搜尋已過期,請重新搜尋")]
             )
         )
         return
