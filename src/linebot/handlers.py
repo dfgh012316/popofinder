@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer
 from linebot.v3.webhooks import PostbackEvent, MessageEvent, TextMessageContent, FollowEvent
 from src.infra.logger import get_logger
-from .services import search_doctor, parse_search_criteria, format_search_summary, SearchCriteria, SearchType
+from src.popo.schemas import SearchType, SearchCriteria
+from src.popo.services import search_doctor
+from .services import parse_search_criteria, format_search_summary
 from .message_templates.doctor_template import create_flex_message
 from .message_templates.help_template import create_help_message
 from .dependencies import get_search_state, update_search_state
