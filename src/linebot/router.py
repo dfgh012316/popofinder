@@ -4,15 +4,14 @@ LINEBOT Router
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Request, HTTPException, Depends
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, PostbackEvent, FollowEvent
 from src.database.connection import get_db
 from src.infra.logger import get_logger
 from .dependencies import get_line_bot_api, parser
-from .handlers import handle_postback_event, handle_message_event, handle_follow_event
+from .event_handler import get_handler
+
 
 logger = get_logger("linebot")
 router = APIRouter()
-
 
 @router.post("/callback")
 async def handle_callback(
@@ -35,11 +34,8 @@ async def handle_callback(
         raise HTTPException(status_code=400, detail="Invalid signature") from exc
 
     for event in events:
-        if isinstance(event, FollowEvent):
-            await handle_follow_event(event, line_bot_api)
-        elif isinstance(event, PostbackEvent):
-            await handle_postback_event(event, line_bot_api, db)
-        elif isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
-            await handle_message_event(event, line_bot_api, db)
+        handler = get_handler(event)
+        if handler:
+            await handler.handle(event, line_bot_api, db)
 
     return "OK"

@@ -1,6 +1,8 @@
 """
 Medical Personnel Search Service
 """
+from linebot.v3.messaging import TextMessage, FlexContainer, FlexMessage
+from src.linebot.message_templates.doctor_template import create_flex_message
 from src.popo.schemas import SearchType, SearchCriteria
 
 
@@ -59,3 +61,51 @@ def format_search_summary(criteria: SearchCriteria, stats: dict) -> str:
         f"共有 {stats['total_count']} 筆符合的結果\n"
         f"目前顯示第 {current_range} 筆"
     )
+
+def create_search_response(doctors: list, stats: dict, criteria: SearchCriteria) -> list:
+    """
+    創建搜尋回應訊息
+    """
+    messages = []
+
+    # 使用 format_search_summary 來生成搜尋統計訊息
+    summary_text = format_search_summary(criteria, stats)
+    messages.append(TextMessage(text=summary_text))
+
+    # 添加搜尋結果
+    messages.append(create_flex_message(doctors))
+
+    # 如果還有更多結果，添加"顯示更多"按鈕
+    if stats['has_more']:
+        next_page_button = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"目前在第 {stats['current_page']}/{stats['total_pages']} 頁",
+                        "size": "sm",
+                        "wrap": True,
+                        "align": "center"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "postback",
+                            "label": "顯示下一頁",
+                            "data": f"action=next_page&offset={stats['current_page']*10}"
+                        },
+                        "style": "primary",
+                        "margin": "md"
+                    }
+                ]
+            }
+        }
+        messages.append(FlexMessage(
+            alt_text="顯示更多",
+            contents=FlexContainer.from_dict(next_page_button)
+        ))
+
+    return messages
