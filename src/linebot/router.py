@@ -37,7 +37,7 @@ async def handle_callback(
     for event in events:
         if isinstance(event, FollowEvent):
             await handle_follow_event(event, line_bot_api)
-        if isinstance(event, PostbackEvent):
+        elif isinstance(event, PostbackEvent):
             await handle_postback_event(event, line_bot_api, db)
         elif isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
             await handle_message_event(event, line_bot_api, db)
