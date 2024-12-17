@@ -12,8 +12,11 @@
 
 ## 使用範例
 
-### 地區查詢
-![地區查詢](./assets/usecase1.jpg)
+### 幫助
+![幫助](./assets/help.jpg)
 
-### 地區 + 姓查詢
-![地區+姓查詢](./assets/usecase2.jpg)
+### 地區醫院查詢
+![地區醫院查詢](./assets/usecase1.jpg)
+
+### 地區科別詢
+![地區科別查詢](./assets/usecase2.jpg)
