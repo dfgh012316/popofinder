@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+
+assets/
+
+.git
+.gitignore
+.github/
+
+makefile
+README.md
