@@ -9,7 +9,7 @@ from src.linebot.services import parse_search_criteria
 from src.linebot.message_templates.help_template import create_help_message
 from src.linebot.services import create_search_response
 from src.linebot.dependencies import update_search_state
-from src.infra.logger import get_logger
+from src.linebot.logger import get_logger
 from .base import BaseHandler
 
 logger = get_logger("linebot")

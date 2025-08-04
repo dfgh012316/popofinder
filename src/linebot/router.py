@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Request, HTTPException, Depends
 from linebot.v3.exceptions import InvalidSignatureError
 from src.database.connection import get_db
-from src.infra.logger import get_logger
+from src.linebot.logger import get_logger
 from .dependencies import get_line_bot_api, parser
 from .event_handler import get_handler
 

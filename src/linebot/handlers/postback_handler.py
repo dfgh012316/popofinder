@@ -9,7 +9,7 @@ from src.linebot.schemas import SearchCriteria, SearchType
 from src.linebot.services import search_doctor
 from src.linebot.dependencies import get_search_state
 from src.linebot.services import create_search_response
-from src.infra.logger import get_logger
+from src.linebot.logger import get_logger
 from .base import BaseHandler
 
 logger = get_logger("linebot")
