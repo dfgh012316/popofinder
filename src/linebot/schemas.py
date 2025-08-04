@@ -1,5 +1,5 @@
 """
-PoPo Doctor Schema
+Linebot Schemas
 """
 from enum import Enum
 from dataclasses import dataclass
