@@ -15,9 +15,23 @@ def parse_search_criteria(message: str) -> SearchCriteria:
     - [城市] 醫師名稱      (例如: 台北王大明)
     """
     cities = [
-        "南投", "台中", "台北", "台南", "台東", "嘉義", "基隆",
-        "宜蘭", "屏東", "彰化", "新北", "新竹", "桃園", "花蓮",
-        "苗栗", "雲林", "高雄"
+        "南投",
+        "台中",
+        "台北",
+        "台南",
+        "台東",
+        "嘉義",
+        "基隆",
+        "宜蘭",
+        "屏東",
+        "彰化",
+        "新北",
+        "新竹",
+        "桃園",
+        "花蓮",
+        "苗栗",
+        "雲林",
+        "高雄",
     ]
 
     # 預設值
@@ -29,7 +43,7 @@ def parse_search_criteria(message: str) -> SearchCriteria:
     for possible_city in cities:
         if message.startswith(possible_city):
             city = possible_city
-            search_term = message[len(city):].strip()
+            search_term = message[len(city) :].strip()
             break
 
     # 檢查搜尋類型
@@ -51,7 +65,7 @@ def format_search_summary(criteria: SearchCriteria, stats: dict) -> str:
     search_type_text = {
         SearchType.NAME: "醫師",
         SearchType.HOSPITAL: "醫院",
-        SearchType.DEPARTMENT: "科別"
+        SearchType.DEPARTMENT: "科別",
     }[criteria.search_type]
 
     current_range = f"{stats['current_page']*10-9} - {min(stats['current_page']*10, stats['total_count'])}"
@@ -62,7 +76,10 @@ def format_search_summary(criteria: SearchCriteria, stats: dict) -> str:
         f"目前顯示第 {current_range} 筆"
     )
 
-def create_search_response(doctors: list, stats: dict, criteria: SearchCriteria) -> list:
+
+def create_search_response(
+    doctors: list, stats: dict, criteria: SearchCriteria
+) -> list:
     """
     創建搜尋回應訊息
     """
@@ -76,7 +93,7 @@ def create_search_response(doctors: list, stats: dict, criteria: SearchCriteria)
     messages.append(create_flex_message(doctors))
 
     # 如果還有更多結果，添加"顯示更多"按鈕
-    if stats['has_more']:
+    if stats["has_more"]:
         next_page_button = {
             "type": "bubble",
             "body": {
@@ -88,30 +105,33 @@ def create_search_response(doctors: list, stats: dict, criteria: SearchCriteria)
                         "text": f"目前在第 {stats['current_page']}/{stats['total_pages']} 頁",
                         "size": "sm",
                         "wrap": True,
-                        "align": "center"
+                        "align": "center",
                     },
                     {
                         "type": "button",
                         "action": {
                             "type": "postback",
                             "label": "顯示下一頁",
-                            "data": f"action=next_page&offset={stats['current_page']*10}"
+                            "data": f"action=next_page&offset={stats['current_page']*10}",
                         },
                         "style": "primary",
-                        "margin": "md"
-                    }
-                ]
-            }
+                        "margin": "md",
+                    },
+                ],
+            },
         }
-        messages.append(FlexMessage(
-            alt_text="顯示更多",
-            contents=FlexContainer.from_dict(next_page_button)
-        ))
+        messages.append(
+            FlexMessage(
+                alt_text="顯示更多", contents=FlexContainer.from_dict(next_page_button)
+            )
+        )
 
     return messages
 
 
-def search_doctor(criteria: SearchCriteria, db: Session, offset: int = 0) -> tuple[list, dict]:
+def search_doctor(
+    criteria: SearchCriteria, db: Session, offset: int = 0
+) -> tuple[list, dict]:
     """
     搜尋醫生資料
     Args:
@@ -155,7 +175,7 @@ def search_doctor(criteria: SearchCriteria, db: Session, offset: int = 0) -> tup
         "total_count": total_count,
         "current_page": offset // 10 + 1,
         "total_pages": (total_count + 9) // 10,
-        "has_more": (offset + 10) < total_count
+        "has_more": (offset + 10) < total_count,
     }
 
     return doctors, stats
