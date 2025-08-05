@@ -1,30 +1,30 @@
 # Gemini Project Context
 
-This file helps Gemini understand the project's context, conventions, and commands to provide more accurate and efficient assistance.
-
 ## Project Overview
 
 - **Project Type**: Python FastAPI application.
-- **Main Functionality**: A LINE Bot designed to search for and provide information about medical personnel.
+- **Main Functionality**: A LINE Bot designed to search for and provide information about medical personnel in Taiwan.
 - **Core Module**: `src/linebot` contains the primary business logic, including handlers, services, and routing for the LINE Bot.
+- **Dependencies**: FastAPI, SQLAlchemy, line-bot-sdk, psycopg2.
 
 ## Development Conventions
 
-- **Testing Framework**: `pytest` is the designated framework for testing.
-- **Code Style**: (To be defined, e.g., Black, Ruff)
+- **Testing Framework**: Not specified.
+- **Code Style**: Not specified.
 - **Dependency Management**: `requirements.txt`
 
 ## Key Commands
 
-- **Run Linter**: (To be defined, e.g., `ruff check .`)
-- **Run Tests**: (To be defined, e.g., `pytest`)
+- **Run Linter**: Not specified.
+- **Run Tests**: Not specified.
+- **Run Application**: `uvicorn src.main:app --host 0.0.0.0 --port 8000`
 
 ## Architectural Decisions & History
 
-- **2025-08-04**: Refactored the project to simplify its structure.
-  - The `popo` module, which contained search logic, was merged into the `linebot` module as it was the sole consumer.
-  - The `infra` module, which only contained a logger, was also merged into the `linebot` module.
-  - This was done to reduce unnecessary modularization and make the project easier to navigate.
+- The application is built using FastAPI and follows a modular structure.
+- The `src/linebot` module encapsulates all LINE Bot-related functionality.
+- Database interactions are handled by SQLAlchemy.
+- The application is designed to be containerized, as indicated by the `dockerfile`.
 
 ## TODO
 
