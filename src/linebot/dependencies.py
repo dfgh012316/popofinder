@@ -15,6 +15,7 @@ from src.config import settings
 
 search_states = defaultdict(dict)
 
+
 class LineBotApiWrapper:
     "Linebot Api Wrapper"
 
@@ -55,6 +56,7 @@ async def get_line_bot_api():
     "Get linebot api"
     return await line_bot_api_wrapper.get_api()
 
+
 def get_search_state(user_id: str) -> dict:
     """
     獲取使用者搜尋狀態
@@ -62,8 +64,9 @@ def get_search_state(user_id: str) -> dict:
 
     current_time = datetime.now()
     expired_users = [
-        uid for uid, state in search_states.items()
-        if state.get('timestamp', current_time) < current_time - timedelta(minutes=30)
+        uid
+        for uid, state in search_states.items()
+        if state.get("timestamp", current_time) < current_time - timedelta(minutes=30)
     ]
 
     for uid in expired_users:
@@ -71,10 +74,11 @@ def get_search_state(user_id: str) -> dict:
 
     return search_states[user_id]
 
+
 def update_search_state(user_id: str, state: dict):
     """
     更新使用者搜尋狀態
     """
 
-    state['timestamp'] = datetime.now()
+    state["timestamp"] = datetime.now()
     search_states[user_id] = state

@@ -10,8 +10,9 @@ follow_handler = FollowEventHandler()
 EVENT_HANDLERS = {
     MessageEvent: message_handler,
     PostbackEvent: postback_handler,
-    FollowEvent: follow_handler
+    FollowEvent: follow_handler,
 }
+
 
 def get_handler(event):
     return EVENT_HANDLERS.get(type(event))

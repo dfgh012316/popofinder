@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from linebot.v3.webhooks import FollowEvent
 from linebot.v3.messaging import ReplyMessageRequest
 from src.linebot.message_templates.help_template import create_help_message
-from src.infra.logger import get_logger
+from src.linebot.logger import get_logger
 from .base import BaseHandler
 
 logger = get_logger("linebot")
