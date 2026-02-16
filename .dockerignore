@@ -9,6 +9,8 @@ assets/
 .git
 .gitignore
 .github/
+.venv/
 
 makefile
+GEMINI.md
 README.md
