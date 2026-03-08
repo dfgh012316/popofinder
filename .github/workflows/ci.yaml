@@ -40,3 +40,18 @@ jobs:
           echo "### Build Summary 🚀" >> $GITHUB_STEP_SUMMARY
           echo "- Image: ${{ secrets.DOCKER_USERNAME }}/popofinder:${{ steps.vars.outputs.DOCKER_TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "- Latest Tag: ${{ secrets.DOCKER_USERNAME }}/popofinder:latest" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Trigger GitOps update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITOPS_TOKEN }}
+          repository: dfgh012316/jerrytech-deploy
+          event-type: update-image-tag
+          client-payload: |
+            {
+              "app": "popofinder",
+              "tag": "${{ steps.vars.outputs.DOCKER_TAG }}",
+              "repo": "${{ github.repository }}",
+              "pr_number": "${{ github.event.pull_request.number || 'N/A' }}",
+              "pr_url": "${{ github.event.pull_request.html_url || 'N/A' }}"
+            }
