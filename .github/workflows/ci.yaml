@@ -53,7 +53,7 @@ jobs:
 
   update-image-tag:
     needs: build-and-push
-    uses: dfgh012316/jerrytech-deploy/.github/workflows/update-image-tag.yaml@develop
+    uses: jerrytech-me/jerrytech-deploy/.github/workflows/update-image-tag.yaml@develop
     with:
       tag: ${{ needs.build-and-push.outputs.docker_tag }}
     secrets: inherit
