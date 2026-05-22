@@ -6,10 +6,11 @@ on:
       - closed
     branches:
       - develop
+  workflow_dispatch:
 
 jobs:
   build-and-push:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
       docker_tag: ${{ steps.vars.outputs.DOCKER_TAG }}
