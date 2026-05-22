@@ -10,14 +10,12 @@ import (
 )
 
 type MedicalPersonnel struct {
-	ID               int            `db:"id"`
-	City             string         `db:"city"`
-	Hospital         string         `db:"hospital"`
-	Department       sql.NullString `db:"department"`
-	Name             string         `db:"name"`
-	Education        sql.NullString `db:"education"`
-	University       sql.NullString `db:"university"`
-	GraduationStatus string         `db:"graduation_status"`
+	ID         int            `db:"id"`
+	City       string         `db:"city"`
+	Hospital   string         `db:"hospital"`
+	Department sql.NullString `db:"department"`
+	Name       string         `db:"name"`
+	Education  sql.NullString `db:"education"`
 }
 
 type SearchStats struct {
@@ -76,7 +74,7 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 
 	// Data query
 	dataSQL := fmt.Sprintf(
-		"SELECT id, city, hospital, department, name, education, university, graduation_status FROM medical_personnel %s LIMIT 10 OFFSET $%d",
+		"SELECT id, city, hospital, department, name, education FROM medical_personnel %s LIMIT 10 OFFSET $%d",
 		where, argIdx,
 	)
 	args = append(args, offset)
