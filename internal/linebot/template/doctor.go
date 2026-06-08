@@ -22,6 +22,31 @@ func strVal(s string) string {
 	return s
 }
 
+func sourceLabel(ns sql.NullString) string {
+	if ns.Valid {
+		switch ns.String {
+		case "blog":
+			return "網路公開彙整"
+		case "public_report":
+			return "民眾回報"
+		}
+	}
+	return "尚未分類"
+}
+
+func verificationLabel(s string) string {
+	switch s {
+	case "verified":
+		return "已查證"
+	case "self_reported":
+		return "醫師本人提供"
+	case "unverified":
+		return "尚未查證"
+	default:
+		return "尚未查證"
+	}
+}
+
 func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	row := func(label, value string, extra map[string]any) map[string]any {
 		labelNode := map[string]any{
@@ -61,6 +86,19 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	eduRow := row("學歷", strOrDefault(p.Education), map[string]any{"wrap": true})
 	eduRow["margin"] = "md"
 
+	sourceRow := row("資料來源", sourceLabel(p.Source), nil)
+	sourceRow["margin"] = "md"
+
+	verifyRow := row("驗證狀態", verificationLabel(p.VerificationStatus), nil)
+	verifyRow["margin"] = "md"
+
+	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow, verifyRow}
+	if p.SourceURL.Valid && p.SourceURL.String != "" {
+		urlRow := row("學歷佐證", p.SourceURL.String, map[string]any{"wrap": true})
+		urlRow["margin"] = "md"
+		bodyContents = append(bodyContents, urlRow)
+	}
+
 	return map[string]any{
 		"type": "bubble",
 		"header": map[string]any{
@@ -80,7 +118,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 		"body": map[string]any{
 			"type":             "box",
 			"layout":           "vertical",
-			"contents":         []any{cityRow, hospitalRow, deptRow, eduRow},
+			"contents":         bodyContents,
 			"backgroundColor":  "#FFFFFF",
 		},
 	}
