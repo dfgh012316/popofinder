@@ -9,13 +9,18 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+const selectColumns = "id, city, hospital, department, name, education, source, verification_status, source_url"
+
 type MedicalPersonnel struct {
-	ID         int            `db:"id"`
-	City       string         `db:"city"`
-	Hospital   string         `db:"hospital"`
-	Department sql.NullString `db:"department"`
-	Name       string         `db:"name"`
-	Education  sql.NullString `db:"education"`
+	ID                 int            `db:"id"`
+	City               string         `db:"city"`
+	Hospital           string         `db:"hospital"`
+	Department         sql.NullString `db:"department"`
+	Name               string         `db:"name"`
+	Education          sql.NullString `db:"education"`
+	Source             sql.NullString `db:"source"`
+	VerificationStatus string         `db:"verification_status"`
+	SourceURL          sql.NullString `db:"source_url"`
 }
 
 type SearchStats struct {
@@ -74,7 +79,7 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 
 	// Data query
 	dataSQL := fmt.Sprintf(
-		"SELECT id, city, hospital, department, name, education FROM medical_personnel %s LIMIT 10 OFFSET $%d",
+		"SELECT "+selectColumns+" FROM medical_personnel %s LIMIT 10 OFFSET $%d",
 		where, argIdx,
 	)
 	args = append(args, offset)
