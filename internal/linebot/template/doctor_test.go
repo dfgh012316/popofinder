@@ -26,6 +26,12 @@ func TestDoctorBubbleShowsSourceVerificationAndURL(t *testing.T) {
 			t.Fatalf("card JSON missing %q: %s", want, s)
 		}
 	}
+	// SourceURL should render as a tappable uri action, not raw text.
+	for _, want := range []string{`"type":"uri"`, `"uri":"https://example.com/doc"`, "點此查看來源"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("card JSON missing link affordance %q: %s", want, s)
+		}
+	}
 }
 
 func TestDoctorBubbleOmitsSourceURLWhenEmpty(t *testing.T) {

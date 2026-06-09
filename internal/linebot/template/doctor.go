@@ -94,7 +94,15 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 
 	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow, verifyRow}
 	if p.SourceURL.Valid && p.SourceURL.String != "" {
-		urlRow := row("學歷佐證", p.SourceURL.String, map[string]any{"wrap": true})
+		urlRow := row("學歷佐證", "點此查看來源", map[string]any{
+			"wrap":  true,
+			"color": "#0066CC",
+			"action": map[string]any{
+				"type":  "uri",
+				"label": "查看來源",
+				"uri":   p.SourceURL.String,
+			},
+		})
 		urlRow["margin"] = "md"
 		bodyContents = append(bodyContents, urlRow)
 	}
@@ -116,10 +124,10 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 			"backgroundColor": "#F0F8FF",
 		},
 		"body": map[string]any{
-			"type":             "box",
-			"layout":           "vertical",
-			"contents":         bodyContents,
-			"backgroundColor":  "#FFFFFF",
+			"type":            "box",
+			"layout":          "vertical",
+			"contents":        bodyContents,
+			"backgroundColor": "#FFFFFF",
 		},
 	}
 }
