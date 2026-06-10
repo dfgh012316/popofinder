@@ -34,19 +34,6 @@ func sourceLabel(ns sql.NullString) string {
 	return "尚未分類"
 }
 
-func verificationLabel(s string) string {
-	switch s {
-	case "verified":
-		return "已查證"
-	case "self_reported":
-		return "醫師本人提供"
-	case "unverified":
-		return "尚未查證"
-	default:
-		return "尚未查證"
-	}
-}
-
 func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	row := func(label, value string, extra map[string]any) map[string]any {
 		labelNode := map[string]any{
@@ -89,12 +76,9 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	sourceRow := row("資料來源", sourceLabel(p.Source), nil)
 	sourceRow["margin"] = "md"
 
-	verifyRow := row("驗證狀態", verificationLabel(p.VerificationStatus), nil)
-	verifyRow["margin"] = "md"
-
-	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow, verifyRow}
+	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow}
 	if p.SourceURL.Valid && p.SourceURL.String != "" {
-		urlRow := row("學歷佐證", "點此查看來源", map[string]any{
+		urlRow := row("來源連結", "點此查看來源", map[string]any{
 			"wrap":  true,
 			"color": "#0066CC",
 			"action": map[string]any{
