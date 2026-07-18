@@ -2,6 +2,7 @@
 
 ## Completed Tasks
 
+- [2026-07-18] health/readiness/version 端點標準化 — 新增 /readyz（查 DB、失敗 503）與 /version（讀 APP_VERSION）,readiness 以可注入的 readinessChecker 介面實作、stub 白箱測試不需 DB,liveness /health 維持靜態;詳見 docs/ARCHITECTURE.md。
 - [2026-06-09] 重爬 blog 對帳回填來源並補充新資料 — 新增 `internal/reconcile`(純函式 ParsePost/BuildPlan + I/O 抓取)與 `cmd/reconcile` binary(`-dry-run`),抓 blog 純文字版 post 以(姓名+醫院)對帳,命中既有列標 source='blog'、blog 有 DB 無者新增,冪等且不臆測回填;詳見 docs/ARCHITECTURE.md。
 - [2026-06-09] 為 medical_personnel 加上來源/驗證/佐證欄位並誠實標示於 LINE 卡片 — 新增 source/verification_status/source_url 三欄(migration + struct + 卡片中性顯示),為後續重爬對帳/眾包校對的前置地基;詳見 docs/ARCHITECTURE.md。
 - [2026-06-09] 為 popofinder 補上 golang-migrate migration runner — 新增 0001 baseline(CREATE TABLE IF NOT EXISTS)+ 0002 來源/驗證變更(up/down 成對),dockerfile 內建 migrate v4.18.1 與 migrations/ 供 init container 自動套用;詳見 docs/ARCHITECTURE.md。

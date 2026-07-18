@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -21,15 +23,26 @@ type Server struct {
 	dispatcher *handler.Dispatcher
 	secret     string
 	repo       *database.Repository
+	ready      readinessChecker
+	version    string
 }
 
-func New(secret string, lineClient *client.Client, dispatcher *handler.Dispatcher, repo *database.Repository) *Server {
+// readinessChecker is the dependency the /readyz handler probes. *database.Repository satisfies it.
+type readinessChecker interface {
+	Ping(ctx context.Context) error
+}
+
+var _ readinessChecker = (*database.Repository)(nil)
+
+func New(secret, version string, lineClient *client.Client, dispatcher *handler.Dispatcher, repo *database.Repository) *Server {
 	s := &Server{
 		router:     chi.NewRouter(),
 		lineClient: lineClient,
 		dispatcher: dispatcher,
 		secret:     secret,
 		repo:       repo,
+		ready:      repo,
+		version:    version,
 	}
 	s.routes()
 	return s
@@ -44,6 +57,8 @@ func (s *Server) routes() {
 	s.router.Use(middleware.RequestID)
 
 	s.router.Get("/health", s.handleHealth)
+	s.router.Get("/readyz", s.handleReady)
+	s.router.Get("/version", s.handleVersion)
 
 	s.router.Route("/api", func(r chi.Router) {
 		r.Route("/linebot", func(r chi.Router) {
@@ -56,6 +71,31 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	w.Header().Set("Content-Type", "application/json")
+	if err := s.ready.Ping(ctx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "unhealthy",
+			"checks": map[string]string{"db": "error"},
+		})
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": "ok",
+		"checks": map[string]string{"db": "ok"},
+	})
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{"version": s.version})
 }
 
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {

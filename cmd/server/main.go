@@ -38,7 +38,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         ":8000",
-		Handler:      server.New(cfg.LineMessageChannelSecret, lineClient, dispatcher, repo),
+		Handler:      server.New(cfg.LineMessageChannelSecret, cfg.AppVersion, lineClient, dispatcher, repo),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
