@@ -2,6 +2,12 @@
 
 ## Recent Architectural Decisions
 
+### 2026-07-18 — health / readiness / version 端點三分（統一 workspace 標準）
+- 新增 `GET /readyz`（readiness，查 DB，失敗回 `503` + `{"status":"unhealthy","checks":{"db":"error"}}`）與 `GET /version`（回 `{"version":"<APP_VERSION>"}`）；`GET /health` 維持 liveness 靜態 `200`。對齊 jerry-wiki `concepts/health-checks.md` 拍板的標準：liveness 永不查相依、readiness 只查 inbound 必需的 DB（不查 LINE API 等 outbound）、只有 readiness 能回非 200。
+- readiness 依賴以 `server.readinessChecker` 介面注入（`*database.Repository` 透過新增的 `Ping(ctx)` 滿足之，編譯期斷言 `var _ readinessChecker = (*database.Repository)(nil)`）；使 handler 能用 stub 白箱測試、延續「測試不連 DB」慣例。`server.New` 因此新增 `version` 參數（唯一 caller `cmd/server/main.go`）。
+- `Config.AppVersion` 讀 `APP_VERSION`（caarlos0/env `envDefault:"unknown"`），由 deploy chart 注入（= image tag = commit short-SHA），免動 dockerfile/CI。
+- 跨 repo 後續：`jerrytech-deploy/charts/app` 的 readiness/startup probe 改打 `/readyz`、新增 startupProbe，須在本 image 部署上線後才 rollout（見該 repo `docs/health-probe-standardization.md`）。
+
 ### 2026-06-09 — blog 重爬對帳工具(`cmd/reconcile` + `internal/reconcile`)
 - 新增 package `internal/reconcile`(純函式核心 `ParsePost`/`BuildPlan` + I/O 外殼 `FetchPlaintextPost`)與 binary `cmd/reconcile`,把 `source`/`source_url` 從全 NULL 回填:抓 `popolist999.blogspot.com` 的「純文字版」post(Blogger feed JSON `?alt=json`,內容為 5 欄 HTML `<table>`),以 `normalizeKey(姓名+醫院)`(`strings.Fields` 去全空白)對帳。命中且未分類的既有列標 `source='blog'`、blog 有 DB 無者新增(皆 `verification_status='unverified'`,不宣稱查證);**已分類列與 DB 有 blog 無的列一律不動**(守「不臆測回填」)。`BuildPlan` 冪等可重跑。
 - **無新增 go.mod 依賴**(HTML 用 stdlib `regexp`+`html.UnescapeString`)。工具讀 `DATABASE_URL` env(沿用 migration runner 慣例,非 server 的 `DB_*`),支援 `-dry-run` 預覽。CI 無 DB/網路,故核心以 fixture 單元測試、I/O 外殼僅 `go build`/`go vet`;實際 production 回填為操作者手動執行。
