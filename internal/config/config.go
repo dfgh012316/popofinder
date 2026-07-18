@@ -17,6 +17,7 @@ type Config struct {
 	DBUser                   string `env:"DB_USER,required"`
 	DBPassword               string `env:"DB_PASSWORD,required"`
 	DBName                   string `env:"DB_NAME,required"`
+	AppVersion               string `env:"APP_VERSION" envDefault:"unknown"`
 }
 
 func (c *Config) IsProduction() bool {

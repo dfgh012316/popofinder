@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -36,6 +37,11 @@ type Repository struct {
 
 func NewRepository(db *sqlx.DB) *Repository {
 	return &Repository{db: db}
+}
+
+// Ping verifies the database connection is usable (readiness check).
+func (r *Repository) Ping(ctx context.Context) error {
+	return r.db.PingContext(ctx)
 }
 
 // Search queries medical_personnel with ILIKE filtering and offset-based pagination.
