@@ -52,9 +52,23 @@ jobs:
           echo "- Image: ${{ secrets.DOCKER_USERNAME }}/popofinder:${{ steps.vars.outputs.DOCKER_TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "- Latest Tag: ${{ secrets.DOCKER_USERNAME }}/popofinder:latest" >> $GITHUB_STEP_SUMMARY
 
-  update-image-tag:
+  deploy:
     needs: build-and-push
-    uses: dfgh012316/jerrytech-deploy/.github/workflows/update-image-tag.yaml@main
-    with:
-      tag: ${{ needs.build-and-push.outputs.docker_tag }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: dfgh012316
+          repositories: jerrytech-deploy
+      - name: Dispatch deploy to jerrytech-deploy
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAG: ${{ needs.build-and-push.outputs.docker_tag }}
+        run: |
+          jq -nc --arg tag "$TAG" \
+            '{event_type:"deploy-app",client_payload:{app:"popofinder",tag:$tag}}' \
+            | gh api -X POST /repos/dfgh012316/jerrytech-deploy/dispatches --input -
