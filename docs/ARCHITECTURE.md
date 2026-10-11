@@ -2,6 +2,12 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — `medical_personnel_history`（trigger 記錄異動）與 `source_checked_at`
+- 新表 `medical_personnel_history`（migration `0005_add_history_and_checked_date`）：由 AFTER INSERT/UPDATE/DELETE FOR EACH ROW trigger `record_medical_personnel_history()` 寫入，存整列 JSONB（`old_row`/`new_row`）與 `reason`；內容沒變的 UPDATE 不記；`personnel_id` 不設 FK。用 DB trigger 而不是在應用程式裡記，是因為 server 不寫這張表，所有修改都來自手動 SQL 或腳本（reconcile CronJob 已停用）。批次修改前在交易內 `SET LOCAL popo.change_reason`；SET LOCAL 的交易結束後，同一條連線的 `current_setting` 會回空字串，trigger 用 `NULLIF` 轉成 NULL。TRUNCATE 不會觸發，不留紀錄。
+- 下架規則（OD-8）：同一交易內刪主表 → 刪該 id 的全部歷史 → 寫一筆不含內容的 DELETE（`reason='takedown'`）。`TestHistoryAllowsTakedownPurge` 釘住「不設 FK、`old_row`/`new_row` 可為 NULL」。
+- `medical_personnel.source_checked_at DATE`：`source_url` 指向的頁面在哪一天確認過。卡片只在有連結時附「（YYYY-MM-DD 查到）」。官網校對沿用 0003 的 `source='hospital_directory'`（卡片顯示「醫療院所官網」），不新增來源值（OD-7）。
+- `make test-integration` 改為驗證最新一支 down migration，取代下面 2026-10-12 那條寫的「0004 down」；之後新增 migration 不必改 makefile。
+
 ### 2026-10-12 — 全欄位查詢、`search_log` 查詢紀錄、DB 整合測試慣例
 - `search.TypeName` 移除，改為 `TypeAll`：沒加 `@醫院`/`@科別` 的輸入同時比對 `name`/`hospital`/`department`。排序以 `matchRankExpr`（`CASE WHEN name ILIKE $1 THEN 0 WHEN hospital ILIKE $1 THEN 1 ELSE 2 END`）為主、`id` 為次；`@` 類型依 `id`。`Search` 從此一律有 `ORDER BY`，offset 分頁穩定。count 查詢用 `COUNT(*) FILTER` 一次取總數與三組筆數（`SearchStats.MatchCounts`，只在 `TypeAll` 填），摘要據此分組顯示。理由與「不保留姓名專查」的取捨見 open-decisions OD-6。
 - 新表 `search_log`（migration `0004_add_search_log`）：每次文字訊息觸發的查詢寫一列（類型、城市、查詢字串、結果筆數），翻頁、說明、加好友不寫；寫入失敗只 `slog.Error`、不影響回覆。**刻意不存使用者識別**（OD-5），由 `TestSearchLogHasNoUserColumn` 釘住欄位集合。
