@@ -89,7 +89,9 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 }
 
 // do sends one GET with the crawler User-Agent, records it as the host's last
-// request (the spacing in Get counts from there) and reads at most maxBodyBytes.
+// request (the spacing in Get counts from there) and returns the body. A body over
+// maxBodyBytes is an error: a truncated page would look like a complete one with
+// fewer doctors, and a truncated robots.txt could drop Disallow rules.
 func (f *Fetcher) do(ctx context.Context, host, rawURL string) (int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -102,9 +104,12 @@ func (f *Fetcher) do(ctx context.Context, host, rawURL string) (int, []byte, err
 		return 0, nil, fmt.Errorf("crawl: GET %s: %w", rawURL, err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes+1))
 	if err != nil {
 		return 0, nil, fmt.Errorf("crawl: read %s: %w", rawURL, err)
+	}
+	if len(body) > maxBodyBytes {
+		return 0, nil, fmt.Errorf("crawl: read %s: body exceeds %d bytes", rawURL, maxBodyBytes)
 	}
 	return resp.StatusCode, body, nil
 }

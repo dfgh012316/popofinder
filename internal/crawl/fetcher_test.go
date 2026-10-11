@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -175,4 +176,51 @@ func TestFetcherDoesNotFollowRedirects(t *testing.T) {
 	_, err := NewFetcher(0).Get(context.Background(), srv.URL+"/old")
 	require.ErrorContains(t, err, "status 302")
 	require.False(t, hitPrivate)
+}
+
+// An over-limit body must fail rather than be parsed truncated, on every request
+// path: a truncated page drops doctors, a truncated robots.txt drops rules.
+func TestFetcherRejectsOversizedBody(t *testing.T) {
+	cases := []struct {
+		name        string
+		robotsBytes int
+		pageBytes   int
+		wantErr     bool
+	}{
+		{"page at limit", 0, maxBodyBytes, false},
+		{"page over limit", 0, maxBodyBytes + 1, true},
+		{"robots.txt over limit", maxBodyBytes + 1, 1, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			hitPage := false
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/robots.txt":
+					if c.robotsBytes == 0 {
+						http.NotFound(w, r)
+						return
+					}
+					w.Write([]byte("User-agent: *\n" + strings.Repeat("#", c.robotsBytes-len("User-agent: *\n"))))
+				case "/page":
+					hitPage = true
+					w.Write([]byte(strings.Repeat("a", c.pageBytes)))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+
+			body, err := NewFetcher(0).Get(context.Background(), srv.URL+"/page")
+			if !c.wantErr {
+				require.NoError(t, err)
+				require.Len(t, body, c.pageBytes)
+				return
+			}
+			require.ErrorContains(t, err, "exceeds")
+			if c.robotsBytes > 0 {
+				require.False(t, hitPage)
+			}
+		})
+	}
 }
