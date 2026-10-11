@@ -140,3 +140,43 @@ func TestTakedownPersonnelRejectsUnknownID(t *testing.T) {
 	require.NoError(t, r.db.Get(&count, "SELECT count(*) FROM medical_personnel"))
 	require.Equal(t, 1, count)
 }
+
+func TestHistorySkipsCheckedDateOnlyUpdate(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{{"台北", "甲醫院", "內科", "王一"}})
+
+	// OD-10: the monthly re-crawl only refreshes the checked date; that must not add history.
+	r.db.MustExec("UPDATE medical_personnel SET source_checked_at = '2026-10-12', updated_at = now() WHERE id = 1")
+	require.Len(t, historyRows(t, r), 1)
+
+	r.db.MustExec("UPDATE medical_personnel SET source_checked_at = '2026-11-12', hospital = '乙醫院' WHERE id = 1")
+	got := historyRows(t, r)
+	require.Len(t, got, 2)
+	require.Equal(t, historyRow{PersonnelID: 1, Op: "UPDATE", OldHospital: valid("甲醫院"), NewHospital: valid("乙醫院")}, got[1])
+}
+
+func TestTakedownPersonnelRecordsSuppression(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, name, source_key) VALUES ('新北', '亞東紀念醫院', '王一', 'femh:1')")
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王二')")
+
+	r.db.MustExec("SELECT takedown_personnel(1)")
+	r.db.MustExec("SELECT takedown_personnel(2)")
+
+	// Only the crawled row leaves a suppression key; a blog row has no source_key to suppress.
+	var keys []string
+	require.NoError(t, r.db.Select(&keys, "SELECT source_key FROM takedown_suppressions ORDER BY source_key"))
+	require.Equal(t, []string{"femh:1"}, keys)
+}
+
+func TestSourceKeyIsUnique(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, name, source_key) VALUES ('新北', '亞東紀念醫院', '王一', 'femh:1')")
+	_, err := r.db.Exec("INSERT INTO medical_personnel (city, hospital, name, source_key) VALUES ('新北', '亞東紀念醫院', '王二', 'femh:1')")
+	require.Error(t, err)
+
+	_, err = r.db.Exec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王三')")
+	require.NoError(t, err)
+	_, err = r.db.Exec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王四')")
+	require.NoError(t, err)
+}
