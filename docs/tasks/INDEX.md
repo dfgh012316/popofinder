@@ -2,6 +2,7 @@
 
 ## Completed Tasks
 
+- [2026-10-12] 下架機制（寄信申請＋`takedown_personnel()`） — migration 0006 新增一次完成 OD-8 下架程序的 SQL function（id 不存在時報錯回滾），說明卡加上「下架與更正」寄信管道，並追加 OD-9；詳見 docs/ARCHITECTURE.md。
 - [2026-10-12] 資料異動歷史表與官網校對的 schema 地基 — migration 0005 新增由 trigger 記錄 `medical_personnel` 每次異動的 `medical_personnel_history`（含 reason 與下架清除規則）和 `source_checked_at`，卡片顯示「醫療院所官網」與查到日期，並追加 OD-7／OD-8 與官網學歷盤點文件；詳見 docs/ARCHITECTURE.md。
 - [2026-10-12] 查詢 onboarding（Quick Reply）＋全欄位查詢＋查詢紀錄 — 沒加 @ 時同時比對姓名/醫院/科別（姓名優先、分頁穩定、摘要分組），說明卡與 0 筆回覆加 Quick Reply，新增不存使用者的 `search_log` 表與 `make test-integration` DB 整合測試;詳見 docs/ARCHITECTURE.md。
 - [2026-07-18] health/readiness/version 端點標準化 — 新增 /readyz（查 DB、失敗 503）與 /version（讀 APP_VERSION）,readiness 以可注入的 readinessChecker 介面實作、stub 白箱測試不需 DB,liveness /health 維持靜態;詳見 docs/ARCHITECTURE.md。

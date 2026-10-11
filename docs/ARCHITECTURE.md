@@ -2,6 +2,10 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — 下架機制：寄信申請＋`takedown_personnel()`
+- 新 DB function `takedown_personnel(p_id INTEGER)`（migration `0006_add_takedown_function`）：同一交易內刪主表 → 清除該 `personnel_id` 的全部歷史（包括 DELETE 時 trigger 剛寫入、含 `old_row` 的那一筆）→ 寫一筆不含內容的 `reason='takedown'` 紀錄；id 不存在時 `RAISE EXCEPTION` 並回滾。維護者在 psql 執行，沒有 Go 呼叫端；`TestHistoryAllowsTakedownPurge`、`TestTakedownPersonnelRejectsUnknownID` 釘住。
+- 下架管道（OD-9）：說明卡寫明信箱，醫師本人或院所寄信並附證明，人工判斷；不在 bot 放按鈕、不建 DB 收件匣（`TestDoctorBubbleHasNoTakedownButton` 釘住卡片沒有按鈕）。爬蟲的排除清單與整院下架留給爬蟲 task。
+
 ### 2026-10-12 — `medical_personnel_history`（trigger 記錄異動）與 `source_checked_at`
 - 新表 `medical_personnel_history`（migration `0005_add_history_and_checked_date`）：由 AFTER INSERT/UPDATE/DELETE FOR EACH ROW trigger `record_medical_personnel_history()` 寫入，存整列 JSONB（`old_row`/`new_row`）與 `reason`；內容沒變的 UPDATE 不記；`personnel_id` 不設 FK。用 DB trigger 而不是在應用程式裡記，是因為 server 不寫這張表，所有修改都來自手動 SQL 或腳本（reconcile CronJob 已停用）。批次修改前在交易內 `SET LOCAL popo.change_reason`；SET LOCAL 的交易結束後，同一條連線的 `current_setting` 會回空字串，trigger 用 `NULLIF` 轉成 NULL。TRUNCATE 不會觸發，不留紀錄。
 - 下架規則（OD-8）：同一交易內刪主表 → 刪該 id 的全部歷史 → 寫一筆不含內容的 DELETE（`reason='takedown'`）。`TestHistoryAllowsTakedownPurge` 釘住「不設 FK、`old_row`/`new_row` 可為 NULL」。
