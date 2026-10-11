@@ -29,6 +29,8 @@ func sourceLabel(ns sql.NullString) string {
 			return "網路公開彙整"
 		case "public_report":
 			return "民眾回報"
+		case "hospital_directory":
+			return "醫療院所官網"
 		}
 	}
 	return "尚未分類"
@@ -78,7 +80,11 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 
 	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow}
 	if p.SourceURL.Valid && p.SourceURL.String != "" {
-		urlRow := row("來源連結", "點此查看來源", map[string]any{
+		urlText := "點此查看來源"
+		if p.SourceCheckedAt.Valid {
+			urlText = fmt.Sprintf("點此查看來源（%s 查到）", p.SourceCheckedAt.Time.Format("2006-01-02"))
+		}
+		urlRow := row("來源連結", urlText, map[string]any{
 			"wrap":  true,
 			"color": "#0066CC",
 			"action": map[string]any{

@@ -10,7 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const selectColumns = "id, city, hospital, department, name, education, source, verification_status, source_url"
+const selectColumns = "id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at"
 
 // matchRankExpr ranks a row for TypeAll ordering: 0 = name match, 1 = hospital match,
 // 2 = department-only match. It references $1, which Search always binds to the term.
@@ -26,6 +26,7 @@ type MedicalPersonnel struct {
 	Source             sql.NullString `db:"source"`
 	VerificationStatus string         `db:"verification_status"`
 	SourceURL          sql.NullString `db:"source_url"`
+	SourceCheckedAt    sql.NullTime   `db:"source_checked_at"`
 }
 
 // MatchCounts breaks a TypeAll result count down by which field matched first.

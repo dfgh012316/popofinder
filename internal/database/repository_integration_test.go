@@ -14,7 +14,7 @@ import (
 )
 
 // openIntegrationDB connects to TEST_DATABASE_URL (set by `make test-integration`)
-// and empties medical_personnel so each test starts from known ids.
+// and empties medical_personnel and its history so each test starts from known ids.
 func openIntegrationDB(t *testing.T) *Repository {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -24,7 +24,7 @@ func openIntegrationDB(t *testing.T) *Repository {
 	db, err := Connect(url)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	db.MustExec("TRUNCATE medical_personnel RESTART IDENTITY")
+	db.MustExec("TRUNCATE medical_personnel, medical_personnel_history RESTART IDENTITY")
 	return NewRepository(db)
 }
 
@@ -167,4 +167,17 @@ func TestSearchLogRejectsUnknownType(t *testing.T) {
 
 	_, err := r.db.Exec("INSERT INTO search_log (search_type, search_term, result_count) VALUES ('name', 'x', 0)")
 	require.Error(t, err)
+}
+
+func TestSearchReturnsSourceCheckedAt(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, department, name, source, source_url, source_checked_at) VALUES ('台北', '甲醫院', '內科', '王一', 'hospital_directory', 'https://example.com/a', '2026-10-12'), ('台北', '甲醫院', '內科', '王二', 'blog', NULL, NULL)")
+
+	got, _, err := r.Search(search.Criteria{SearchType: search.TypeAll, SearchTerm: "王"}, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.True(t, got[0].SourceCheckedAt.Valid)
+	require.Equal(t, "2026-10-12", got[0].SourceCheckedAt.Time.Format("2006-01-02"))
+	require.Equal(t, "hospital_directory", got[0].Source.String)
+	require.False(t, got[1].SourceCheckedAt.Valid)
 }

@@ -19,7 +19,7 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 
 - Go 單體,監聽 `:8000`,使用 chi router。對外端點:`POST /api/linebot/callback`(LINE webhook)、`GET /health`。
 - `cmd/server/main.go` 進入點;`internal/` 下分 config / database / server / linebot(client·handler·search·session·template·webhook)。
-- DB:Postgres,透過 sqlx + pgx;兩張表:`medical_personnel`(id, city, hospital, department, name, education, source, verification_status, source_url)與 `search_log`(查詢紀錄,刻意不存使用者,見 open-decisions OD-5)。
+- DB:Postgres,透過 sqlx + pgx;三張表:`medical_personnel`(id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at)、`medical_personnel_history`(由 trigger 記錄前者每一次異動,批次修改前先 `SET LOCAL popo.change_reason`;下架時連同歷史清除,見 open-decisions OD-8)與 `search_log`(查詢紀錄,刻意不存使用者,見 open-decisions OD-5)。
 - 設定由環境變數載入(`internal/config`),`.env` 可選;見 `.env.example`。
 
 ## 常用指令

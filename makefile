@@ -32,5 +32,5 @@ test-integration:
 	@for i in $$(seq 1 60); do docker exec $(IT_CONTAINER) pg_isready -h 127.0.0.1 -U postgres -q && break; sleep 1; done
 	@set -e; for f in migrations/*.up.sql; do docker exec -i $(IT_CONTAINER) psql -q -U postgres -v ON_ERROR_STOP=1 < $$f; done
 	TEST_DATABASE_URL='$(IT_DB_URL)' go test -tags integration -count=1 -v ./internal/database/; status=$$?; \
-	docker exec -i $(IT_CONTAINER) psql -q -U postgres -v ON_ERROR_STOP=1 < migrations/0004_add_search_log.down.sql || status=1; \
+	docker exec -i $(IT_CONTAINER) psql -q -U postgres -v ON_ERROR_STOP=1 < $$(ls migrations/*.down.sql | sort | tail -n 1) || status=1; \
 	docker rm -f $(IT_CONTAINER) >/dev/null; exit $$status
