@@ -80,7 +80,9 @@ func TestFetcherTreatsRobots5xxAsDisallow(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := NewFetcher(0).Get(context.Background(), srv.URL+"/ok")
+	f := NewFetcher(0)
+	f.sleep = func(time.Duration) {}
+	_, err := f.Get(context.Background(), srv.URL+"/ok")
 	require.ErrorContains(t, err, "robots.txt")
 	require.False(t, hitOK)
 }
@@ -95,7 +97,9 @@ func TestFetcherErrorsOnNon200(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := NewFetcher(0).Get(context.Background(), srv.URL+"/fail")
+	f := NewFetcher(0)
+	f.sleep = func(time.Duration) {}
+	_, err := f.Get(context.Background(), srv.URL+"/fail")
 	require.ErrorContains(t, err, "status 500")
 }
 
@@ -211,16 +215,67 @@ func TestFetcherRejectsOversizedBody(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			body, err := NewFetcher(0).Get(context.Background(), srv.URL+"/page")
+			f := NewFetcher(0)
+			var waits []time.Duration
+			f.sleep = func(d time.Duration) { waits = append(waits, d) }
+			body, err := f.Get(context.Background(), srv.URL+"/page")
 			if !c.wantErr {
 				require.NoError(t, err)
 				require.Len(t, body, c.pageBytes)
 				return
 			}
 			require.ErrorContains(t, err, "exceeds")
+			require.Empty(t, waits, "an over-limit body is not retried")
 			if c.robotsBytes > 0 {
 				require.False(t, hitPage)
 			}
+		})
+	}
+}
+
+func TestFetcherRetriesServerErrors(t *testing.T) {
+	cases := []struct {
+		name      string
+		failures  int // 500s before the page succeeds
+		status    int
+		wantErr   string
+		wantHits  int
+		wantWaits []time.Duration
+	}{
+		{"transient 500 then 200", 2, http.StatusInternalServerError, "", 3, retryWaits},
+		{"500 on every attempt", 99, http.StatusInternalServerError, "status 500", 3, retryWaits},
+		{"404 is not retried", 99, http.StatusNotFound, "status 404", 1, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			hits := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/robots.txt":
+					http.NotFound(w, r)
+				case "/page":
+					hits++
+					if hits <= c.failures {
+						w.WriteHeader(c.status)
+						return
+					}
+					w.Write([]byte("ok"))
+				}
+			}))
+			defer srv.Close()
+
+			f := NewFetcher(0)
+			var waits []time.Duration
+			f.sleep = func(d time.Duration) { waits = append(waits, d) }
+			body, err := f.Get(context.Background(), srv.URL+"/page")
+			if c.wantErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, "ok", body)
+			} else {
+				require.ErrorContains(t, err, c.wantErr)
+			}
+			require.Equal(t, c.wantHits, hits)
+			require.Equal(t, c.wantWaits, waits)
 		})
 	}
 }

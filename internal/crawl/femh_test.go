@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -95,8 +96,10 @@ func TestFemhCrawlAggregatesDepartments(t *testing.T) {
 
 func TestFemhCrawlFailsOnMissingDeptPage(t *testing.T) {
 	srv := femhFixtureServer(t, "0203")
+	f := NewFetcher(0)
+	f.sleep = func(time.Duration) {}
 
-	got, err := NewFemh(srv.URL, NewFetcher(0)).Crawl(context.Background())
+	got, err := NewFemh(srv.URL, f).Crawl(context.Background())
 	require.Error(t, err)
 	require.Nil(t, got)
 }

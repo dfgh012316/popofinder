@@ -2,6 +2,7 @@ package crawl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,14 @@ const (
 	robotsAgent  = "popofinder-crawler"
 	maxBodyBytes = 5 << 20
 )
+
+// retryWaits are the pauses before retrying a request that hit a network error or
+// a 5xx. Hospital sites return occasional 500s, and one failed page fails the whole
+// crawl, so a transient error must not end a run of a thousand requests.
+var retryWaits = []time.Duration{10 * time.Second, 30 * time.Second}
+
+// errBodyTooLarge is not retried: the same page would be too large again.
+var errBodyTooLarge = fmt.Errorf("body exceeds %d bytes", maxBodyBytes)
 
 // Fetcher GETs pages with an identifiable User-Agent, obeys each host's robots.txt
 // (including Crawl-delay) and spaces out every request to the same host, the
@@ -55,7 +64,7 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 
 	data, ok := f.robots[host]
 	if !ok {
-		status, body, err := f.do(ctx, host, host+"/robots.txt")
+		status, body, err := f.doWithRetry(ctx, host, host+"/robots.txt")
 		if err != nil {
 			return "", err
 		}
@@ -78,7 +87,7 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 		}
 	}
 
-	status, body, err := f.do(ctx, host, rawURL)
+	status, body, err := f.doWithRetry(ctx, host, rawURL)
 	if err != nil {
 		return "", err
 	}
@@ -86,6 +95,20 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 		return "", fmt.Errorf("crawl: GET %s: status %d", rawURL, status)
 	}
 	return string(body), nil
+}
+
+// doWithRetry calls do, retrying after each of retryWaits while the request
+// fails with a network error or a 5xx status.
+func (f *Fetcher) doWithRetry(ctx context.Context, host, rawURL string) (int, []byte, error) {
+	status, body, err := f.do(ctx, host, rawURL)
+	for _, w := range retryWaits {
+		if errors.Is(err, errBodyTooLarge) || (err == nil && status < 500) {
+			break
+		}
+		f.sleep(w)
+		status, body, err = f.do(ctx, host, rawURL)
+	}
+	return status, body, err
 }
 
 // do sends one GET with the crawler User-Agent, records it as the host's last
@@ -109,7 +132,7 @@ func (f *Fetcher) do(ctx context.Context, host, rawURL string) (int, []byte, err
 		return 0, nil, fmt.Errorf("crawl: read %s: %w", rawURL, err)
 	}
 	if len(body) > maxBodyBytes {
-		return 0, nil, fmt.Errorf("crawl: read %s: body exceeds %d bytes", rawURL, maxBodyBytes)
+		return 0, nil, fmt.Errorf("crawl: read %s: %w", rawURL, errBodyTooLarge)
 	}
 	return resp.StatusCode, body, nil
 }
