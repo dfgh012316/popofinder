@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dfgh012316/popofinder/internal/database"
 )
@@ -53,5 +54,60 @@ func TestDoctorBubbleOmitsSourceURLWhenEmpty(t *testing.T) {
 	}
 	if !strings.Contains(s, "網路公開彙整") {
 		t.Fatalf("card JSON missing 網路公開彙整: %s", s)
+	}
+}
+
+func TestDoctorBubbleShowsCheckedDate(t *testing.T) {
+	raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:            "測試醫師",
+		City:            "台北市",
+		Hospital:        "測試醫院",
+		Source:          sql.NullString{String: "hospital_directory", Valid: true},
+		SourceURL:       sql.NullString{String: "https://example.com/a", Valid: true},
+		SourceCheckedAt: sql.NullTime{Time: time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC), Valid: true},
+	}})
+	if err != nil {
+		t.Fatalf("DoctorsFlexMessage error: %v", err)
+	}
+	s := string(raw)
+	for _, want := range []string{"醫療院所官網", "點此查看來源（2026-10-12 查到）"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("card JSON missing %q: %s", want, s)
+		}
+	}
+
+	raw, err = DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:      "測試醫師",
+		City:      "台北市",
+		Hospital:  "測試醫院",
+		Source:    sql.NullString{String: "hospital_directory", Valid: true},
+		SourceURL: sql.NullString{String: "https://example.com/a", Valid: true},
+	}})
+	if err != nil {
+		t.Fatalf("DoctorsFlexMessage error: %v", err)
+	}
+	s = string(raw)
+	if !strings.Contains(s, `"text":"點此查看來源"`) {
+		t.Fatalf("card JSON should show plain link text without a date: %s", s)
+	}
+	if strings.Contains(s, "查到") {
+		t.Fatalf("card JSON should not show 查到 without SourceCheckedAt: %s", s)
+	}
+}
+
+func TestDoctorBubbleCheckedDateNeedsURL(t *testing.T) {
+	raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:            "測試醫師",
+		City:            "台北市",
+		Hospital:        "測試醫院",
+		Source:          sql.NullString{String: "hospital_directory", Valid: true},
+		SourceCheckedAt: sql.NullTime{Time: time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC), Valid: true},
+	}})
+	if err != nil {
+		t.Fatalf("DoctorsFlexMessage error: %v", err)
+	}
+	s := string(raw)
+	if strings.Contains(s, "來源連結") || strings.Contains(s, "查到") {
+		t.Fatalf("card JSON should not show 來源連結 or 查到 without SourceURL: %s", s)
 	}
 }

@@ -2,6 +2,7 @@
 
 ## Completed Tasks
 
+- [2026-10-12] 資料異動歷史表與官網校對的 schema 地基 — migration 0005 新增由 trigger 記錄 `medical_personnel` 每次異動的 `medical_personnel_history`（含 reason 與下架清除規則）和 `source_checked_at`，卡片顯示「醫療院所官網」與查到日期，並追加 OD-7／OD-8 與官網學歷盤點文件；詳見 docs/ARCHITECTURE.md。
 - [2026-10-12] 查詢 onboarding（Quick Reply）＋全欄位查詢＋查詢紀錄 — 沒加 @ 時同時比對姓名/醫院/科別（姓名優先、分頁穩定、摘要分組），說明卡與 0 筆回覆加 Quick Reply，新增不存使用者的 `search_log` 表與 `make test-integration` DB 整合測試;詳見 docs/ARCHITECTURE.md。
 - [2026-07-18] health/readiness/version 端點標準化 — 新增 /readyz（查 DB、失敗 503）與 /version（讀 APP_VERSION）,readiness 以可注入的 readinessChecker 介面實作、stub 白箱測試不需 DB,liveness /health 維持靜態;詳見 docs/ARCHITECTURE.md。
 - [2026-06-09] 重爬 blog 對帳回填來源並補充新資料 — 新增 `internal/reconcile`(純函式 ParsePost/BuildPlan + I/O 抓取)與 `cmd/reconcile` binary(`-dry-run`),抓 blog 純文字版 post 以(姓名+醫院)對帳,命中既有列標 source='blog'、blog 有 DB 無者新增,冪等且不臆測回填;詳見 docs/ARCHITECTURE.md。
