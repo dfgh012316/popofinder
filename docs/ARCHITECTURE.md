@@ -2,6 +2,13 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — 官網爬蟲框架（`cmd/crawl` + `internal/crawl`）＋亞東
+- 新 package `internal/crawl`：`Source` 介面（`Name`、`Crawl`，任一頁失敗就回 error、不回部分結果）、`Fetcher`（UA `popofinder-crawler/1.0 (+mailto:…)`、每 host 讀一次 robots.txt、同 host 間隔 `max(minInterval, Crawl-delay)`、非 200 回 error、不支援並行）、學歷規則 `hasMedicalDegree`（OD-10）、純函式 `BuildSyncPlan`（insert／update／只改日期的 touch／delete、排除清單、無醫學學位跳過、符合條件數 ×2 < 現有數時不刪並設 `DeleteBlocked`）。新增醫院＝新的 `Source` 實作，加進 `cmd/crawl` 的 `registry`。第一個實作 `Femh`（亞東：索引→科別→個人頁，以站內 DoctorID 為鍵）。
+- **新依賴** `github.com/temoto/robotstxt v1.1.2`：robots.txt 回 5xx 時 `FindGroup().Test()` 會判定為允許，必須用 `TestAgent`（`TestFetcherTreatsRobots5xxAsDisallow` 釘住）。
+- **Schema（migration `0007_add_crawl_keys`）**：`medical_personnel.source_key`（`<來源>:<站內 ID>`，partial unique index）、`takedown_suppressions`（只存鍵）。trigger 改為「去掉 `source_checked_at`／`updated_at` 後前後相同就不記」，取代 0005 條目的「內容沒變的 UPDATE 不記」；`takedown_personnel` 下架有 `source_key` 的列時寫入排除清單，完成 0006 條目留給爬蟲 task 的部分。
+- `Repository.LoadCrawlState`／`ApplyCrawlPlan`：一個交易、`set_config('popo.change_reason', 'crawl:<來源>', true)`、`source='hospital_directory'`；`source_checked_at` 以 `"2006-01-02"` 字串傳入。`cmd/crawl`（`-sources`、`-dry-run`）連 DB 前驗證來源名稱（錯誤 exit 2），時區用 `time.FixedZone`（distroless 沒有 tzdata），log 只記數量；image 多一個 `/crawl`。
+- parser 測試只用合成 fixture（虛構姓名）；`//go:build live` 的 `TestFemhLive` 直接打官網確認結構（4 個請求，只印數量），CI 不跑。
+
 ### 2026-10-12 — 下架機制：寄信申請＋`takedown_personnel()`
 - 新 DB function `takedown_personnel(p_id INTEGER)`（migration `0006_add_takedown_function`）：同一交易內刪主表 → 清除該 `personnel_id` 的全部歷史（包括 DELETE 時 trigger 剛寫入、含 `old_row` 的那一筆）→ 寫一筆不含內容的 `reason='takedown'` 紀錄；id 不存在時 `RAISE EXCEPTION` 並回滾。維護者在 psql 執行，沒有 Go 呼叫端；`TestHistoryAllowsTakedownPurge`、`TestTakedownPersonnelRejectsUnknownID` 釘住。
 - 下架管道（OD-9）：說明卡寫明信箱，醫師本人或院所寄信並附證明，人工判斷；不在 bot 放按鈕、不建 DB 收件匣（`TestDoctorBubbleHasNoTakedownButton` 釘住卡片沒有按鈕）。爬蟲的排除清單與整院下架留給爬蟲 task。
