@@ -12,6 +12,10 @@ import (
 
 const selectColumns = "id, city, hospital, department, name, education, source, verification_status, source_url"
 
+// matchRankExpr ranks a row for TypeAll ordering: 0 = name match, 1 = hospital match,
+// 2 = department-only match. It references $1, which Search always binds to the term.
+const matchRankExpr = "CASE WHEN name ILIKE $1 THEN 0 WHEN hospital ILIKE $1 THEN 1 ELSE 2 END"
+
 type MedicalPersonnel struct {
 	ID                 int            `db:"id"`
 	City               string         `db:"city"`
@@ -24,11 +28,19 @@ type MedicalPersonnel struct {
 	SourceURL          sql.NullString `db:"source_url"`
 }
 
+// MatchCounts breaks a TypeAll result count down by which field matched first.
+type MatchCounts struct {
+	Name       int
+	Hospital   int
+	Department int
+}
+
 type SearchStats struct {
 	TotalCount  int
 	CurrentPage int
 	TotalPages  int
 	HasMore     bool
+	MatchCounts MatchCounts // populated only for search.TypeAll
 }
 
 type Repository struct {
@@ -44,7 +56,7 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return r.db.PingContext(ctx)
 }
 
-// Search queries medical_personnel with ILIKE filtering and offset-based pagination.
+// Search queries medical_personnel with ILIKE filtering, deterministic ordering, and offset-based pagination.
 func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPersonnel, SearchStats, error) {
 	var (
 		whereClauses []string
@@ -55,8 +67,8 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 	term := "%" + criteria.SearchTerm + "%"
 
 	switch criteria.SearchType {
-	case search.TypeName:
-		whereClauses = append(whereClauses, fmt.Sprintf("name ILIKE $%d", argIdx))
+	case search.TypeAll:
+		whereClauses = append(whereClauses, fmt.Sprintf("(name ILIKE $%d OR hospital ILIKE $%d OR department ILIKE $%d)", argIdx, argIdx, argIdx))
 	case search.TypeHospital:
 		whereClauses = append(whereClauses, fmt.Sprintf("hospital ILIKE $%d", argIdx))
 	case search.TypeDepartment:
@@ -77,16 +89,33 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 	}
 
 	// Count query
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM medical_personnel %s", where)
-	var totalCount int
-	if err := r.db.Get(&totalCount, countSQL, args...); err != nil {
+	countSQL := fmt.Sprintf(
+		"SELECT COUNT(*) AS total, "+
+			"COUNT(*) FILTER (WHERE %[1]s = 0) AS name_count, "+
+			"COUNT(*) FILTER (WHERE %[1]s = 1) AS hospital_count, "+
+			"COUNT(*) FILTER (WHERE %[1]s = 2) AS department_count "+
+			"FROM medical_personnel %[2]s",
+		matchRankExpr, where,
+	)
+	var counts struct {
+		Total      int `db:"total"`
+		Name       int `db:"name_count"`
+		Hospital   int `db:"hospital_count"`
+		Department int `db:"department_count"`
+	}
+	if err := r.db.Get(&counts, countSQL, args...); err != nil {
 		return nil, SearchStats{}, fmt.Errorf("repository: count: %w", err)
 	}
+	totalCount := counts.Total
 
 	// Data query
+	orderBy := "id"
+	if criteria.SearchType == search.TypeAll {
+		orderBy = matchRankExpr + ", id"
+	}
 	dataSQL := fmt.Sprintf(
-		"SELECT "+selectColumns+" FROM medical_personnel %s LIMIT 10 OFFSET $%d",
-		where, argIdx,
+		"SELECT "+selectColumns+" FROM medical_personnel %s ORDER BY %s LIMIT 10 OFFSET $%d",
+		where, orderBy, argIdx,
 	)
 	args = append(args, offset)
 
@@ -103,6 +132,22 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 		TotalPages:  totalPages,
 		HasMore:     (offset + 10) < totalCount,
 	}
+	if criteria.SearchType == search.TypeAll {
+		stats.MatchCounts = MatchCounts{Name: counts.Name, Hospital: counts.Hospital, Department: counts.Department}
+	}
 
 	return records, stats, nil
+}
+
+// LogSearch records one user-initiated search for coverage analysis. It deliberately
+// stores no user identifier (docs/open-decisions.md OD-5).
+func (r *Repository) LogSearch(ctx context.Context, criteria search.Criteria, resultCount int) error {
+	_, err := r.db.ExecContext(ctx,
+		"INSERT INTO search_log (search_type, city, search_term, result_count) VALUES ($1, $2, $3, $4)",
+		string(criteria.SearchType), criteria.City, criteria.SearchTerm, resultCount,
+	)
+	if err != nil {
+		return fmt.Errorf("repository: log search: %w", err)
+	}
+	return nil
 }

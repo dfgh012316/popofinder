@@ -1,0 +1,50 @@
+package template
+
+import (
+	"encoding/json"
+	"testing"
+	"unicode/utf8"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestHelpFlexMessageQuickReply(t *testing.T) {
+	raw, err := HelpFlexMessage()
+	require.NoError(t, err)
+
+	var got struct {
+		QuickReply struct {
+			Items []struct {
+				Action map[string]string `json:"action"`
+			} `json:"items"`
+		} `json:"quickReply"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &got))
+
+	var texts []string
+	for _, item := range got.QuickReply.Items {
+		require.Equal(t, "message", item.Action["type"])
+		require.LessOrEqual(t, utf8.RuneCountInString(item.Action["label"]), 20, "label too long: %s", item.Action["label"])
+		texts = append(texts, item.Action["text"])
+	}
+	require.Equal(t, []string{"陳", "三總", "台北 牙科"}, texts)
+}
+
+func TestHelpFlexMessageUsageText(t *testing.T) {
+	raw, err := HelpFlexMessage()
+	require.NoError(t, err)
+	s := string(raw)
+
+	for _, want := range []string{
+		"關鍵字（姓名、醫院或科別）",
+		"例如：陳、三總、牙科",
+		"城市 關鍵字",
+		"例如：台北 牙科",
+		"[城市]@醫院 醫院名稱",
+		"[城市]@科別 科別名稱",
+		"支援城市",
+	} {
+		require.Contains(t, s, want)
+	}
+	require.NotContains(t, s, "[城市] 醫師名稱")
+}

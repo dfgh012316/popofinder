@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/dfgh012316/popofinder/internal/database"
 	"github.com/dfgh012316/popofinder/internal/linebot/client"
@@ -14,6 +15,12 @@ import (
 	"github.com/dfgh012316/popofinder/internal/linebot/template"
 	"github.com/dfgh012316/popofinder/internal/linebot/webhook"
 )
+
+// helpCommand is the text that shows the help card; quick replies send it too.
+const helpCommand = "幫助"
+
+// maxQuickReplyTextRunes is LINE's limit for a message action's text.
+const maxQuickReplyTextRunes = 300
 
 // MessageHandler handles text MessageEvent.
 type MessageHandler struct {
@@ -34,7 +41,7 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 
 	// Help command
 	lower := strings.ToLower(text)
-	if lower == "幫助" || lower == "help" {
+	if lower == helpCommand || lower == "help" {
 		helpMsg, err := template.HelpFlexMessage()
 		if err != nil {
 			return err
@@ -58,6 +65,10 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 	personnel, stats, err := repo.Search(criteria, 0)
 	if err != nil {
 		return err
+	}
+
+	if err := repo.LogSearch(ctx, criteria, stats.TotalCount); err != nil {
+		slog.Error("log search", "err", err)
 	}
 
 	messages, err := buildSearchResponse(criteria, personnel, stats)
@@ -85,6 +96,12 @@ func buildSearchResponse(criteria search.Criteria, personnel []database.MedicalP
 	if err != nil {
 		return nil, err
 	}
+	if stats.TotalCount == 0 {
+		flexMsg, err = template.WithQuickReply(flexMsg, zeroResultActions(criteria))
+		if err != nil {
+			return nil, err
+		}
+	}
 	messages = append(messages, flexMsg)
 
 	// "Next page" button if there are more results
@@ -109,20 +126,50 @@ func formatSummary(criteria search.Criteria, stats database.SearchStats) string 
 	}
 
 	typeText := map[search.SearchType]string{
-		search.TypeName:       "醫師",
+		search.TypeAll:        "",
 		search.TypeHospital:   "醫院",
 		search.TypeDepartment: "科別",
 	}[criteria.SearchType]
+
+	header := fmt.Sprintf("查詢%s%s「%s」", location, typeText, criteria.SearchTerm)
+	if stats.TotalCount == 0 {
+		return header + "\n共有 0 筆符合的結果"
+	}
+
+	countLine := fmt.Sprintf("共有 %d 筆符合的結果", stats.TotalCount)
+	if criteria.SearchType == search.TypeAll {
+		var groups []string
+		for _, g := range []struct {
+			label string
+			n     int
+		}{
+			{"姓名", stats.MatchCounts.Name},
+			{"醫院", stats.MatchCounts.Hospital},
+			{"科別", stats.MatchCounts.Department},
+		} {
+			if g.n > 0 {
+				groups = append(groups, fmt.Sprintf("%s %d", g.label, g.n))
+			}
+		}
+		countLine += "（" + strings.Join(groups, "、") + "）"
+	}
 
 	start := stats.CurrentPage*10 - 9
 	end := stats.CurrentPage * 10
 	if end > stats.TotalCount {
 		end = stats.TotalCount
 	}
+	return fmt.Sprintf("%s\n%s\n目前顯示第 %d - %d 筆", header, countLine, start, end)
+}
 
-	return fmt.Sprintf("查詢%s%s「%s」\n共有 %d 筆符合的結果\n目前顯示第 %d - %d 筆",
-		location, typeText, criteria.SearchTerm,
-		stats.TotalCount,
-		start, end,
-	)
+// zeroResultActions suggests next steps when a search finds nothing: widen a narrowed
+// search (city or @ type) to an all-field nationwide search, and always offer help.
+func zeroResultActions(criteria search.Criteria) []template.QuickReplyAction {
+	var actions []template.QuickReplyAction
+	n := utf8.RuneCountInString(criteria.SearchTerm)
+	narrowed := criteria.City != nil || criteria.SearchType != search.TypeAll
+	if narrowed && n > 0 && n <= maxQuickReplyTextRunes {
+		actions = append(actions, template.QuickReplyAction{Label: "擴大搜尋", Text: criteria.SearchTerm})
+	}
+	return append(actions, template.QuickReplyAction{Label: "使用說明", Text: helpCommand})
 }

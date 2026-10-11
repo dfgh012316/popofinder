@@ -4,7 +4,8 @@ package search
 type SearchType string
 
 const (
-	TypeName       SearchType = "name"
+	// TypeAll matches name, hospital, or department (default when no @ prefix).
+	TypeAll        SearchType = "all"
 	TypeHospital   SearchType = "hospital"
 	TypeDepartment SearchType = "department"
 )
