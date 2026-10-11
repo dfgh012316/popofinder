@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS takedown_personnel(INTEGER);

@@ -111,3 +111,21 @@ func TestDoctorBubbleCheckedDateNeedsURL(t *testing.T) {
 		t.Fatalf("card JSON should not show 來源連結 or 查到 without SourceURL: %s", s)
 	}
 }
+
+func TestDoctorBubbleHasNoTakedownButton(t *testing.T) {
+	raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:      "測試醫師",
+		City:      "台北市",
+		Hospital:  "測試醫院",
+		Source:    sql.NullString{String: "blog", Valid: true},
+		SourceURL: sql.NullString{String: "https://example.com/doc", Valid: true},
+	}})
+	if err != nil {
+		t.Fatalf("DoctorsFlexMessage error: %v", err)
+	}
+	s := string(raw)
+	// 下架改用寄信申請(OD-9),醫師卡片不得出現下架按鈕或任何 postback。
+	if strings.Contains(s, "下架") || strings.Contains(s, `"type":"postback"`) {
+		t.Fatalf("doctor card must not offer a takedown button or postback: %s", s)
+	}
+}
