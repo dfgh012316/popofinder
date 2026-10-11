@@ -48,3 +48,13 @@ func TestHelpFlexMessageUsageText(t *testing.T) {
 	}
 	require.NotContains(t, s, "[城市] 醫師名稱")
 }
+
+func TestHelpFlexMessageTakedownContact(t *testing.T) {
+	raw, err := HelpFlexMessage()
+	require.NoError(t, err)
+	s := string(raw)
+
+	for _, want := range []string{"下架與更正", "jerrychuang@jerrytech.me", "可證明身分的資料"} {
+		require.Contains(t, s, want)
+	}
+}

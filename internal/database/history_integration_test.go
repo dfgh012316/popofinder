@@ -109,19 +109,34 @@ func TestHistoryAllowsTakedownPurge(t *testing.T) {
 	})
 	r.db.MustExec("UPDATE medical_personnel SET hospital = '乙醫院' WHERE id = 1")
 
-	// OD-8 takedown: delete the row, purge its history, keep one content-free DELETE record.
-	tx := r.db.MustBegin()
-	tx.MustExec("DELETE FROM medical_personnel WHERE id = 1")
-	tx.MustExec("DELETE FROM medical_personnel_history WHERE personnel_id = 1")
-	tx.MustExec("INSERT INTO medical_personnel_history (personnel_id, op, reason) VALUES (1, 'DELETE', 'takedown')")
-	require.NoError(t, tx.Commit())
+	// OD-8/OD-9 takedown: takedown_personnel deletes the row, purges its history and keeps one content-free DELETE record.
+	r.db.MustExec("SELECT takedown_personnel(1)")
 
 	var leaked int
 	require.NoError(t, r.db.Get(&leaked,
 		"SELECT count(*) FROM medical_personnel_history WHERE personnel_id = 1 AND (old_row IS NOT NULL OR new_row IS NOT NULL)"))
 	require.Zero(t, leaked)
+	var remaining int
+	require.NoError(t, r.db.Get(&remaining, "SELECT count(*) FROM medical_personnel WHERE id = 1"))
+	require.Zero(t, remaining)
 	require.Equal(t, []historyRow{
 		{PersonnelID: 2, Op: "INSERT", NewHospital: valid("甲醫院")},
 		{PersonnelID: 1, Op: "DELETE", Reason: valid("takedown")},
 	}, historyRows(t, r))
+}
+
+func TestTakedownPersonnelRejectsUnknownID(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{{"台北", "甲醫院", "內科", "王一"}})
+
+	_, err := r.db.Exec("SELECT takedown_personnel(999)")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+
+	require.Equal(t, []historyRow{
+		{PersonnelID: 1, Op: "INSERT", NewHospital: valid("甲醫院")},
+	}, historyRows(t, r))
+	var count int
+	require.NoError(t, r.db.Get(&count, "SELECT count(*) FROM medical_personnel"))
+	require.Equal(t, 1, count)
 }
