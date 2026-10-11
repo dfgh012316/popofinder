@@ -140,3 +140,120 @@ func TestTakedownPersonnelRejectsUnknownID(t *testing.T) {
 	require.NoError(t, r.db.Get(&count, "SELECT count(*) FROM medical_personnel"))
 	require.Equal(t, 1, count)
 }
+
+func TestHistorySkipsCheckedDateOnlyUpdate(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{{"台北", "甲醫院", "內科", "王一"}})
+
+	// OD-10: the monthly re-crawl only refreshes the checked date; that must not add history.
+	r.db.MustExec("UPDATE medical_personnel SET source_checked_at = '2026-10-12', updated_at = now() WHERE id = 1")
+	require.Len(t, historyRows(t, r), 1)
+
+	r.db.MustExec("UPDATE medical_personnel SET source_checked_at = '2026-11-12', hospital = '乙醫院' WHERE id = 1")
+	got := historyRows(t, r)
+	require.Len(t, got, 2)
+	require.Equal(t, historyRow{PersonnelID: 1, Op: "UPDATE", OldHospital: valid("甲醫院"), NewHospital: valid("乙醫院")}, got[1])
+}
+
+func TestTakedownPersonnelRecordsSuppression(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, name, source_key) VALUES ('新北', '亞東紀念醫院', '王一', 'femh:1')")
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王二')")
+
+	r.db.MustExec("SELECT takedown_personnel(1)")
+	r.db.MustExec("SELECT takedown_personnel(2)")
+
+	// Only the crawled row leaves a suppression key; a blog row has no source_key to suppress.
+	var keys []string
+	require.NoError(t, r.db.Select(&keys, "SELECT source_key FROM takedown_suppressions ORDER BY source_key"))
+	require.Equal(t, []string{"femh:1"}, keys)
+}
+
+func TestSourceKeyIsUnique(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec("INSERT INTO medical_personnel (city, hospital, name, source_key) VALUES ('新北', '亞東紀念醫院', '王一', 'femh:1')")
+	_, err := r.db.Exec("INSERT INTO medical_personnel (city, hospital, name, source_key) VALUES ('新北', '亞東紀念醫院', '王二', 'femh:1')")
+	require.Error(t, err)
+
+	_, err = r.db.Exec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王三')")
+	require.NoError(t, err)
+	_, err = r.db.Exec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王四')")
+	require.NoError(t, err)
+}
+
+// TestTakedownLeavesNoDoctorContent pins the takedown guarantee (OD-8, OD-9, OD-10)
+// for every way a doctor's content can be stored: after the takedown no live row
+// and no history row carries the doctor's name, while a bystander keeps its data.
+func TestTakedownLeavesNoDoctorContent(t *testing.T) {
+	insert := func(t *testing.T, r *Repository, name string, key any) int {
+		t.Helper()
+		var id int
+		require.NoError(t, r.db.Get(&id,
+			"INSERT INTO medical_personnel (city, hospital, name, education, source_key) VALUES ('新北', '亞東紀念醫院', $1, '國立台灣大學醫學系', $2) RETURNING id",
+			name, key))
+		return id
+	}
+	del := func(r *Repository, id int) { r.db.MustExec("DELETE FROM medical_personnel WHERE id = $1", id) }
+	takedown := func(r *Repository, id int) { r.db.MustExec("SELECT takedown_personnel($1)", id) }
+
+	cases := []struct {
+		name string
+		run  func(t *testing.T, r *Repository)
+	}{
+		{"live crawled row", func(t *testing.T, r *Repository) {
+			takedown(r, insert(t, r, "王一", "femh:1"))
+		}},
+		{"re-added after crawl deletion, takedown by new id", func(t *testing.T, r *Repository) {
+			del(r, insert(t, r, "王一", "femh:1"))
+			cur := insert(t, r, "王一", "femh:1")
+			r.db.MustExec("UPDATE medical_personnel SET education = '國立陽明大學醫學系' WHERE id = $1", cur)
+			takedown(r, cur)
+		}},
+		{"re-added after crawl deletion, takedown by old id", func(t *testing.T, r *Repository) {
+			old := insert(t, r, "王一", "femh:1")
+			del(r, old)
+			insert(t, r, "王一", "femh:1")
+			takedown(r, old)
+		}},
+		{"deleted by crawl, history only", func(t *testing.T, r *Repository) {
+			id := insert(t, r, "王一", "femh:1")
+			del(r, id)
+			takedown(r, id)
+		}},
+		{"blog row deleted, history only", func(t *testing.T, r *Repository) {
+			id := insert(t, r, "王一", nil)
+			del(r, id)
+			takedown(r, id)
+		}},
+		{"whole source", func(t *testing.T, r *Repository) {
+			insert(t, r, "王一", "femh:1")
+			del(r, insert(t, r, "王一", "femh:2"))
+			del(r, insert(t, r, "王一", "femh:3"))
+			insert(t, r, "王一", "femh:3")
+			var n int
+			require.NoError(t, r.db.Get(&n, "SELECT takedown_source('femh')"))
+			require.Equal(t, 3, n)
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := openIntegrationDB(t)
+			insert(t, r, "王二", "cgmh:1")
+
+			c.run(t, r)
+
+			var live, content, markers int
+			require.NoError(t, r.db.Get(&live, "SELECT count(*) FROM medical_personnel WHERE name = '王一'"))
+			require.NoError(t, r.db.Get(&content, "SELECT count(*) FROM medical_personnel_history WHERE COALESCE(old_row, new_row)->>'name' = '王一'"))
+			require.NoError(t, r.db.Get(&markers, "SELECT count(*) FROM medical_personnel_history WHERE reason = 'takedown' AND old_row IS NULL AND new_row IS NULL"))
+			require.Zero(t, live)
+			require.Zero(t, content)
+			require.NotZero(t, markers)
+
+			require.NoError(t, r.db.Get(&live, "SELECT count(*) FROM medical_personnel WHERE name = '王二'"))
+			require.NoError(t, r.db.Get(&content, "SELECT count(*) FROM medical_personnel_history WHERE COALESCE(old_row, new_row)->>'name' = '王二'"))
+			require.Equal(t, 1, live)
+			require.Equal(t, 1, content)
+		})
+	}
+}

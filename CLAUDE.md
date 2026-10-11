@@ -18,8 +18,8 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 ## 架構
 
 - Go 單體,監聽 `:8000`,使用 chi router。對外端點:`POST /api/linebot/callback`(LINE webhook)、`GET /health`。
-- `cmd/server/main.go` 進入點;`internal/` 下分 config / database / server / linebot(client·handler·search·session·template·webhook)。
-- DB:Postgres,透過 sqlx + pgx;三張表:`medical_personnel`(id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at)、`medical_personnel_history`(由 trigger 記錄前者每一次異動,批次修改前先 `SET LOCAL popo.change_reason`;下架用 `SELECT takedown_personnel(<id>);` 連同歷史清除,見 open-decisions OD-8、OD-9)與 `search_log`(查詢紀錄,刻意不存使用者,見 open-decisions OD-5)。
+- `cmd/server/main.go` 進入點;`internal/` 下分 config / database / server / linebot(client·handler·search·session·template·webhook)。`cmd/crawl` + `internal/crawl` 是醫院官網爬蟲(open-decisions OD-7、OD-10)。
+- DB:Postgres,透過 sqlx + pgx;四張表:`medical_personnel`(id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at, source_key)、`medical_personnel_history`(由 trigger 記錄前者每一次異動,只改查到日期不記;批次修改前先 `SET LOCAL popo.change_reason`;下架用 `SELECT takedown_personnel(<id>);` 連同歷史清除,見 open-decisions OD-8、OD-9)、`takedown_suppressions`(被下架的官網醫師,爬蟲跳過,見 OD-10)與 `search_log`(查詢紀錄,刻意不存使用者,見 open-decisions OD-5)。
 - 設定由環境變數載入(`internal/config`),`.env` 可選;見 `.env.example`。
 
 ## 常用指令
@@ -28,3 +28,5 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 - `make build` — buildx 多平台(arm64 + amd64,給樹莓派)推 image,需 `DOCKER_USER`。
 - `go test ./...` — 跑測試(search / session / webhook 有單元測試)。
 - `make test-integration` — 起本機 Docker `postgres:18.6-bookworm`、套 migrations,跑 `-tags integration` 的 DB 整合測試(`internal/database`)。
+- `go run ./cmd/crawl -sources femh -dry-run` — 醫院官網爬蟲(讀 `DATABASE_URL`;`-dry-run` 只印計畫數量,不寫入)。
+- `go test -tags live ./internal/crawl` — 直接打醫院官網,確認頁面結構沒變(需要網路,CI 不跑)。

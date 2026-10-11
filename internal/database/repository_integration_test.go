@@ -14,7 +14,7 @@ import (
 )
 
 // openIntegrationDB connects to TEST_DATABASE_URL (set by `make test-integration`)
-// and empties medical_personnel and its history so each test starts from known ids.
+// and empties medical_personnel, its history and takedown suppressions so each test starts from known ids.
 func openIntegrationDB(t *testing.T) *Repository {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -24,7 +24,7 @@ func openIntegrationDB(t *testing.T) *Repository {
 	db, err := Connect(url)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	db.MustExec("TRUNCATE medical_personnel, medical_personnel_history RESTART IDENTITY")
+	db.MustExec("TRUNCATE medical_personnel, medical_personnel_history, takedown_suppressions RESTART IDENTITY")
 	return NewRepository(db)
 }
 
