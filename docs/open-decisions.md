@@ -141,7 +141,7 @@
   - 每月重爬:內容有變就更新並記歷史(reason `crawl:<來源>`);沒變只更新 `source_checked_at`,不記歷史(trigger 忽略只改 `source_checked_at`/`updated_at` 的 UPDATE)。官網上消失、或不再寫醫學學位的醫師刪除(記歷史)。
   - **刪除保護**:某來源這次任何一頁抓取失敗,整個來源不寫入;抓到符合條件的人數不到 DB 現有的一半時,不做任何刪除並讓 job 失敗。
   - **下架排除**:`takedown_personnel()` 下架官網醫師時,把它的 `source_key` 記進 `takedown_suppressions`(只存鍵,不存內容),爬蟲之後跳過。**整院下架**:從 CronJob 的 `-sources` 拿掉該院,再執行 `SELECT takedown_personnel(id) FROM medical_personnel WHERE source_key LIKE '<來源>:%';`。
-  - 爬蟲使用 UA `popofinder-crawler/1.0 (+mailto:jerrychuang@jerrytech.me)`,執行時讀 robots.txt(被擋就停、遵守 Crawl-delay),同一 host 至少間隔 1 秒;log 只記數量,不記姓名。
+  - 爬蟲使用 UA `popofinder-crawler/1.0 (+mailto:jerrychuang@jerrytech.me)`,執行時讀 robots.txt(被擋就停、遵守 Crawl-delay),同一 host 的每個請求(含 robots.txt)至少間隔 1 秒,不跟隨轉址(轉址會跳過 robots 檢查,當成抓取失敗);log 不記姓名與學歷:計畫只記數量,抓取失敗時記出錯頁面的網址(只含站內 ID),才知道是哪一頁壞掉。
   - parser 測試只用自製的合成 HTML(仿真實結構、虛構姓名),真實頁面不進 repo;另有 `-tags live` 的測試直接打官網,確認頁面結構沒變。
 - **理由**:
   - 先上一家:比對、刪除、排除清單、歷史這些框架邏輯有問題時只影響一家,修好再擴。

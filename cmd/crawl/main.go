@@ -51,7 +51,8 @@ func main() {
 	checkedOn := time.Now().In(time.FixedZone("Asia/Taipei", 8*60*60))
 	ctx := context.Background()
 
-	// Logs carry counts only, never names, education or URLs (OD-10).
+	// No log carries names or education (OD-10): the plan log is counts only, and a
+	// crawl error names the failing page URL (site IDs only) so the page can be found.
 	failed := false
 	for _, s := range selected {
 		name := s.Name()

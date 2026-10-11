@@ -18,8 +18,9 @@ const (
 )
 
 // Fetcher GETs pages with an identifiable User-Agent, obeys each host's robots.txt
-// (including Crawl-delay) and spaces out requests to the same host.
-// It is not safe for concurrent use.
+// (including Crawl-delay) and spaces out every request to the same host, the
+// robots.txt fetch included. It never follows redirects. It is not safe for
+// concurrent use.
 type Fetcher struct {
 	client      *http.Client
 	minInterval time.Duration
@@ -30,7 +31,12 @@ type Fetcher struct {
 
 func NewFetcher(minInterval time.Duration) *Fetcher {
 	return &Fetcher{
-		client:      &http.Client{Timeout: 30 * time.Second},
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+			// A redirect hop would skip the robots.txt check and the spacing in Get,
+			// so the 3xx response is returned as-is and fails as a non-200 status.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 		minInterval: minInterval,
 		sleep:       time.Sleep,
 		robots:      map[string]*robotstxt.RobotsData{},
@@ -49,7 +55,7 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 
 	data, ok := f.robots[host]
 	if !ok {
-		status, body, err := f.do(ctx, host+"/robots.txt")
+		status, body, err := f.do(ctx, host, host+"/robots.txt")
 		if err != nil {
 			return "", err
 		}
@@ -72,8 +78,7 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 		}
 	}
 
-	status, body, err := f.do(ctx, rawURL)
-	f.last[host] = time.Now()
+	status, body, err := f.do(ctx, host, rawURL)
 	if err != nil {
 		return "", err
 	}
@@ -83,14 +88,16 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 	return string(body), nil
 }
 
-// do sends one GET with the crawler User-Agent and reads at most maxBodyBytes.
-func (f *Fetcher) do(ctx context.Context, rawURL string) (int, []byte, error) {
+// do sends one GET with the crawler User-Agent, records it as the host's last
+// request (the spacing in Get counts from there) and reads at most maxBodyBytes.
+func (f *Fetcher) do(ctx context.Context, host, rawURL string) (int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return 0, nil, fmt.Errorf("crawl: GET %s: %w", rawURL, err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 	resp, err := f.client.Do(req)
+	f.last[host] = time.Now()
 	if err != nil {
 		return 0, nil, fmt.Errorf("crawl: GET %s: %w", rawURL, err)
 	}

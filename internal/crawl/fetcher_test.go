@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -119,4 +120,59 @@ func TestFetcherWaitsCrawlDelay(t *testing.T) {
 	_, err = f.Get(context.Background(), srv.URL+"/ok")
 	require.NoError(t, err)
 	require.Greater(t, waited, 4*time.Second)
+}
+
+// Every request to a host, the robots.txt fetch included, must be preceded by a
+// wait once the host has been contacted: no two requests may hit it back-to-back.
+func TestFetcherSpacesEveryRequestToHost(t *testing.T) {
+	var mu sync.Mutex
+	var events []string
+	record := func(e string) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, e)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		record("GET " + r.URL.Path)
+		if r.URL.Path == "/robots.txt" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	f := NewFetcher(time.Second)
+	f.sleep = func(time.Duration) { record("sleep") }
+	_, err := f.Get(context.Background(), srv.URL+"/a")
+	require.NoError(t, err)
+	_, err = f.Get(context.Background(), srv.URL+"/b")
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"GET /robots.txt", "sleep", "GET /a", "sleep", "GET /b"}, events)
+}
+
+// A redirect hop would bypass the robots.txt check, so it is never followed.
+func TestFetcherDoesNotFollowRedirects(t *testing.T) {
+	hitPrivate := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			w.Write([]byte("User-agent: *\nDisallow: /private\n"))
+		case "/old":
+			http.Redirect(w, r, "/private", http.StatusFound)
+		case "/private":
+			hitPrivate = true
+			w.Write([]byte("secret"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	_, err := NewFetcher(0).Get(context.Background(), srv.URL+"/old")
+	require.ErrorContains(t, err, "status 302")
+	require.False(t, hitPrivate)
 }
