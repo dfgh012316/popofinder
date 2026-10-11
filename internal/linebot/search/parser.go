@@ -12,9 +12,9 @@ var cities = []string{
 //
 //	[城市]@醫院 醫院名稱   e.g. 台北@醫院 台大醫院
 //	[城市]@科別 科別名稱   e.g. 台北@科別 小兒科
-//	[城市] 醫師名稱        e.g. 台北 陳
+//	[城市] 關鍵字          e.g. 台北 陳 / 三總 / 牙科（同時比對姓名、醫院、科別）
 func ParseCriteria(message string) Criteria {
-	searchType := TypeName
+	searchType := TypeAll
 	searchTerm := strings.TrimSpace(message)
 	var city *string
 

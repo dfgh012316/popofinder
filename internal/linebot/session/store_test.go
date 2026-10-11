@@ -11,12 +11,12 @@ import (
 
 func TestStore_SetAndGet(t *testing.T) {
 	s := NewStore()
-	s.Set("user1", State{SearchTerm: "陳", SearchType: search.TypeName})
+	s.Set("user1", State{SearchTerm: "陳", SearchType: search.TypeAll})
 
 	got := s.Get("user1")
 	require.NotNil(t, got)
 	assert.Equal(t, "陳", got.SearchTerm)
-	assert.Equal(t, search.TypeName, got.SearchType)
+	assert.Equal(t, search.TypeAll, got.SearchType)
 }
 
 func TestStore_GetMissing(t *testing.T) {
@@ -26,7 +26,7 @@ func TestStore_GetMissing(t *testing.T) {
 
 func TestStore_Expiry(t *testing.T) {
 	s := NewStore()
-	s.Set("user1", State{SearchTerm: "test", SearchType: search.TypeName})
+	s.Set("user1", State{SearchTerm: "test", SearchType: search.TypeAll})
 
 	// Manually expire the entry
 	s.mu.Lock()

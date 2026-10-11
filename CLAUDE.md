@@ -19,7 +19,7 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 
 - Go 單體,監聽 `:8000`,使用 chi router。對外端點:`POST /api/linebot/callback`(LINE webhook)、`GET /health`。
 - `cmd/server/main.go` 進入點;`internal/` 下分 config / database / server / linebot(client·handler·search·session·template·webhook)。
-- DB:Postgres,透過 sqlx + pgx;目前單表 `medical_personnel`(id, city, hospital, department, name, education)。
+- DB:Postgres,透過 sqlx + pgx;兩張表:`medical_personnel`(id, city, hospital, department, name, education, source, verification_status, source_url)與 `search_log`(查詢紀錄,刻意不存使用者,見 open-decisions OD-5)。
 - 設定由環境變數載入(`internal/config`),`.env` 可選;見 `.env.example`。
 
 ## 常用指令
@@ -27,3 +27,4 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 - `make local-build` / `make local-run` — 本地 Docker build 與跑(:8000)。
 - `make build` — buildx 多平台(arm64 + amd64,給樹莓派)推 image,需 `DOCKER_USER`。
 - `go test ./...` — 跑測試(search / session / webhook 有單元測試)。
+- `make test-integration` — 起本機 Docker `postgres:18.6-bookworm`、套 migrations,跑 `-tags integration` 的 DB 整合測試(`internal/database`)。

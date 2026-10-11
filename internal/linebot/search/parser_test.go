@@ -17,16 +17,16 @@ func TestParseCriteria(t *testing.T) {
 		wantCity *string
 	}{
 		{
-			name:     "name search no city",
+			name:     "keyword search no city",
 			input:    "陳",
-			wantType: TypeName,
+			wantType: TypeAll,
 			wantTerm: "陳",
 			wantCity: nil,
 		},
 		{
-			name:     "name search with city",
+			name:     "keyword search with city",
 			input:    "台北 陳",
-			wantType: TypeName,
+			wantType: TypeAll,
 			wantTerm: "陳",
 			wantCity: strPtr("台北"),
 		},
@@ -56,6 +56,13 @@ func TestParseCriteria(t *testing.T) {
 			input:    "@科別 小兒科",
 			wantType: TypeDepartment,
 			wantTerm: "小兒科",
+			wantCity: nil,
+		},
+		{
+			name:     "hospital name without prefix",
+			input:    "三總",
+			wantType: TypeAll,
+			wantTerm: "三總",
 			wantCity: nil,
 		},
 	}

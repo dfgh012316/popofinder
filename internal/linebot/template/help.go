@@ -31,6 +31,56 @@ var helpContents = map[string]any{
 						"weight": "bold",
 						"size":   "lg",
 					},
+					// Keyword search format
+					map[string]any{
+						"type":    "box",
+						"layout":  "vertical",
+						"spacing": "sm",
+						"contents": []any{
+							map[string]any{
+								"type":   "box",
+								"layout": "baseline",
+								"contents": []any{
+									map[string]any{"type": "text", "text": "🔍", "size": "sm", "color": "#666666", "flex": 1},
+									map[string]any{"type": "text", "text": "關鍵字（姓名、醫院或科別）", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+								},
+							},
+							map[string]any{
+								"type":   "box",
+								"layout": "baseline",
+								"contents": []any{
+									map[string]any{"type": "text", "text": "💡", "size": "sm", "color": "#666666", "flex": 1},
+									map[string]any{"type": "text", "text": "例如：陳、三總、牙科", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+								},
+							},
+						},
+					},
+					map[string]any{"type": "separator", "margin": "lg"},
+					// City + keyword format
+					map[string]any{
+						"type":    "box",
+						"layout":  "vertical",
+						"spacing": "sm",
+						"contents": []any{
+							map[string]any{
+								"type":   "box",
+								"layout": "baseline",
+								"contents": []any{
+									map[string]any{"type": "text", "text": "📍", "size": "sm", "color": "#666666", "flex": 1},
+									map[string]any{"type": "text", "text": "城市 關鍵字", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+								},
+							},
+							map[string]any{
+								"type":   "box",
+								"layout": "baseline",
+								"contents": []any{
+									map[string]any{"type": "text", "text": "💡", "size": "sm", "color": "#666666", "flex": 1},
+									map[string]any{"type": "text", "text": "例如：台北 牙科", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+								},
+							},
+						},
+					},
+					map[string]any{"type": "separator", "margin": "lg"},
 					// Hospital search format
 					map[string]any{
 						"type":    "box",
@@ -81,31 +131,6 @@ var helpContents = map[string]any{
 						},
 					},
 					map[string]any{"type": "separator", "margin": "lg"},
-					// Name search format
-					map[string]any{
-						"type":    "box",
-						"layout":  "vertical",
-						"spacing": "sm",
-						"contents": []any{
-							map[string]any{
-								"type":   "box",
-								"layout": "baseline",
-								"contents": []any{
-									map[string]any{"type": "text", "text": "👤", "size": "sm", "color": "#666666", "flex": 1},
-									map[string]any{"type": "text", "text": "[城市] 醫師名稱", "size": "sm", "color": "#666666", "flex": 5},
-								},
-							},
-							map[string]any{
-								"type":   "box",
-								"layout": "baseline",
-								"contents": []any{
-									map[string]any{"type": "text", "text": "💡", "size": "sm", "color": "#666666", "flex": 1},
-									map[string]any{"type": "text", "text": "例如：台北 陳", "size": "sm", "color": "#666666", "flex": 5},
-								},
-							},
-						},
-					},
-					map[string]any{"type": "separator", "margin": "lg"},
 					// Supported cities
 					map[string]any{
 						"type":   "box",
@@ -134,7 +159,19 @@ var helpContents = map[string]any{
 	},
 }
 
-// HelpFlexMessage returns the raw JSON for the help usage message.
+// helpQuickReply offers tappable example searches. Examples use a surname, a hospital
+// short name, and a department only — never a real doctor's full name (OD-6).
+var helpQuickReply = []QuickReplyAction{
+	{Label: "範例：陳", Text: "陳"},
+	{Label: "範例：三總", Text: "三總"},
+	{Label: "範例：台北 牙科", Text: "台北 牙科"},
+}
+
+// HelpFlexMessage returns the raw JSON for the help usage message with example quick replies.
 func HelpFlexMessage() (json.RawMessage, error) {
-	return buildFlexMessage("使用說明", helpContents)
+	msg, err := buildFlexMessage("使用說明", helpContents)
+	if err != nil {
+		return nil, err
+	}
+	return WithQuickReply(msg, helpQuickReply)
 }

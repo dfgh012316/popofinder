@@ -2,6 +2,12 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — 全欄位查詢、`search_log` 查詢紀錄、DB 整合測試慣例
+- `search.TypeName` 移除，改為 `TypeAll`：沒加 `@醫院`/`@科別` 的輸入同時比對 `name`/`hospital`/`department`。排序以 `matchRankExpr`（`CASE WHEN name ILIKE $1 THEN 0 WHEN hospital ILIKE $1 THEN 1 ELSE 2 END`）為主、`id` 為次；`@` 類型依 `id`。`Search` 從此一律有 `ORDER BY`，offset 分頁穩定。count 查詢用 `COUNT(*) FILTER` 一次取總數與三組筆數（`SearchStats.MatchCounts`，只在 `TypeAll` 填），摘要據此分組顯示。理由與「不保留姓名專查」的取捨見 open-decisions OD-6。
+- 新表 `search_log`（migration `0004_add_search_log`）：每次文字訊息觸發的查詢寫一列（類型、城市、查詢字串、結果筆數），翻頁、說明、加好友不寫；寫入失敗只 `slog.Error`、不影響回覆。**刻意不存使用者識別**（OD-5），由 `TestSearchLogHasNoUserColumn` 釘住欄位集合。
+- Quick Reply 以 `template.WithQuickReply` 疊加在既有訊息 JSON 上（LINE 只顯示一次回覆中最後一則的 QR）；說明卡（加好友與「幫助」共用）附範例、0 筆時附「擴大搜尋／使用說明」。範例不用真實醫師全名（OD-6）。
+- DB 整合測試慣例：`//go:build integration` + `TEST_DATABASE_URL`，由 `make test-integration` 起本機 Docker `postgres:18.6-bookworm`、套全部 up migration、跑 `internal/database` 測試、再驗證 0004 down。預設 `go test ./...` 與 CI 仍不需 DB。
+
 ### 2026-07-18 — health / readiness / version 端點三分（統一 workspace 標準）
 - 新增 `GET /readyz`（readiness，查 DB，失敗回 `503` + `{"status":"unhealthy","checks":{"db":"error"}}`）與 `GET /version`（回 `{"version":"<APP_VERSION>"}`）；`GET /health` 維持 liveness 靜態 `200`。對齊 jerry-wiki `concepts/health-checks.md` 拍板的標準：liveness 永不查相依、readiness 只查 inbound 必需的 DB（不查 LINE API 等 outbound）、只有 readiness 能回非 200。
 - readiness 依賴以 `server.readinessChecker` 介面注入（`*database.Repository` 透過新增的 `Ping(ctx)` 滿足之，編譯期斷言 `var _ readinessChecker = (*database.Repository)(nil)`）；使 handler 能用 stub 白箱測試、延續「測試不連 DB」慣例。`server.New` 因此新增 `version` 參數（唯一 caller `cmd/server/main.go`）。
