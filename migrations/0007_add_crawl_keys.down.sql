@@ -1,3 +1,5 @@
+DROP FUNCTION IF EXISTS takedown_source(TEXT);
+
 CREATE OR REPLACE FUNCTION takedown_personnel(p_id INTEGER) RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN

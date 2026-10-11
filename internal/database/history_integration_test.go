@@ -180,3 +180,80 @@ func TestSourceKeyIsUnique(t *testing.T) {
 	_, err = r.db.Exec("INSERT INTO medical_personnel (city, hospital, name) VALUES ('台北', '甲醫院', '王四')")
 	require.NoError(t, err)
 }
+
+// TestTakedownLeavesNoDoctorContent pins the takedown guarantee (OD-8, OD-9, OD-10)
+// for every way a doctor's content can be stored: after the takedown no live row
+// and no history row carries the doctor's name, while a bystander keeps its data.
+func TestTakedownLeavesNoDoctorContent(t *testing.T) {
+	insert := func(t *testing.T, r *Repository, name string, key any) int {
+		t.Helper()
+		var id int
+		require.NoError(t, r.db.Get(&id,
+			"INSERT INTO medical_personnel (city, hospital, name, education, source_key) VALUES ('新北', '亞東紀念醫院', $1, '國立台灣大學醫學系', $2) RETURNING id",
+			name, key))
+		return id
+	}
+	del := func(r *Repository, id int) { r.db.MustExec("DELETE FROM medical_personnel WHERE id = $1", id) }
+	takedown := func(r *Repository, id int) { r.db.MustExec("SELECT takedown_personnel($1)", id) }
+
+	cases := []struct {
+		name string
+		run  func(t *testing.T, r *Repository)
+	}{
+		{"live crawled row", func(t *testing.T, r *Repository) {
+			takedown(r, insert(t, r, "王一", "femh:1"))
+		}},
+		{"re-added after crawl deletion, takedown by new id", func(t *testing.T, r *Repository) {
+			del(r, insert(t, r, "王一", "femh:1"))
+			cur := insert(t, r, "王一", "femh:1")
+			r.db.MustExec("UPDATE medical_personnel SET education = '國立陽明大學醫學系' WHERE id = $1", cur)
+			takedown(r, cur)
+		}},
+		{"re-added after crawl deletion, takedown by old id", func(t *testing.T, r *Repository) {
+			old := insert(t, r, "王一", "femh:1")
+			del(r, old)
+			insert(t, r, "王一", "femh:1")
+			takedown(r, old)
+		}},
+		{"deleted by crawl, history only", func(t *testing.T, r *Repository) {
+			id := insert(t, r, "王一", "femh:1")
+			del(r, id)
+			takedown(r, id)
+		}},
+		{"blog row deleted, history only", func(t *testing.T, r *Repository) {
+			id := insert(t, r, "王一", nil)
+			del(r, id)
+			takedown(r, id)
+		}},
+		{"whole source", func(t *testing.T, r *Repository) {
+			insert(t, r, "王一", "femh:1")
+			del(r, insert(t, r, "王一", "femh:2"))
+			del(r, insert(t, r, "王一", "femh:3"))
+			insert(t, r, "王一", "femh:3")
+			var n int
+			require.NoError(t, r.db.Get(&n, "SELECT takedown_source('femh')"))
+			require.Equal(t, 3, n)
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := openIntegrationDB(t)
+			insert(t, r, "王二", "cgmh:1")
+
+			c.run(t, r)
+
+			var live, content, markers int
+			require.NoError(t, r.db.Get(&live, "SELECT count(*) FROM medical_personnel WHERE name = '王一'"))
+			require.NoError(t, r.db.Get(&content, "SELECT count(*) FROM medical_personnel_history WHERE COALESCE(old_row, new_row)->>'name' = '王一'"))
+			require.NoError(t, r.db.Get(&markers, "SELECT count(*) FROM medical_personnel_history WHERE reason = 'takedown' AND old_row IS NULL AND new_row IS NULL"))
+			require.Zero(t, live)
+			require.Zero(t, content)
+			require.NotZero(t, markers)
+
+			require.NoError(t, r.db.Get(&live, "SELECT count(*) FROM medical_personnel WHERE name = '王二'"))
+			require.NoError(t, r.db.Get(&content, "SELECT count(*) FROM medical_personnel_history WHERE COALESCE(old_row, new_row)->>'name' = '王二'"))
+			require.Equal(t, 1, live)
+			require.Equal(t, 1, content)
+		})
+	}
+}

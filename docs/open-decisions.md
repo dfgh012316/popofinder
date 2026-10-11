@@ -123,7 +123,7 @@
   - **不在醫師卡片放「要求下架」按鈕,也不做 bot 內的下架指令**;不建 DB 收件匣,申請就在信箱裡,維護者定期看信。
   - 確認後在 psql 執行 `SELECT takedown_personnel(<id>);`:同一交易內刪主表 → 清除該醫師的全部歷史 → 寫一筆不含內容的紀錄(OD-8);id 不存在時報錯並回滾。
   - 爬蟲上線時(OD-7),被下架的官網醫師要加入排除清單,避免重爬又加回來;排除清單與「整院下架」在爬蟲 task 一起實作。
-  - 2026-10-12 補註:排除清單(`takedown_suppressions`)與整院下架的做法見 OD-10。
+  - 2026-10-12 補註:排除清單(`takedown_suppressions`)、整院下架、以及醫師已被爬蟲刪除(主表沒有那一列)時的下架做法見 OD-10。
   - `search_log` 裡的查詢字串不在下架範圍:它是內部用量資料,不對外顯示,也不關聯到醫師資料列。
 - **理由**:
   - 卡片上的按鈕會讓一般使用者誤觸,而且收到申請也無從判斷該不該下架;寄信可以附上證明,維護者能判斷是不是本人或院所。
@@ -140,7 +140,7 @@
   - 學歷存該頁學歷欄的每一行(以「；」串接,最多 500 字)。至少一行是醫學學士等級才收錄:含「醫學系」「醫學士」(涵蓋牙醫學系、中醫學系、學士後醫學系),或不含其他「學系」而含「醫學院」「醫學大學」,或英文 MD/DDS/DMD/MBBS/Medicine;寫了碩士、博士、研究所的那一行不算。**中醫師也收。**
   - 每月重爬:內容有變就更新並記歷史(reason `crawl:<來源>`);沒變只更新 `source_checked_at`,不記歷史(trigger 忽略只改 `source_checked_at`/`updated_at` 的 UPDATE)。官網上消失、或不再寫醫學學位的醫師刪除(記歷史)。
   - **刪除保護**:某來源這次任何一頁抓取失敗,整個來源不寫入;抓到符合條件的人數不到 DB 現有的一半時,不做任何刪除並讓 job 失敗。
-  - **下架排除**:`takedown_personnel()` 下架官網醫師時,把它的 `source_key` 記進 `takedown_suppressions`(只存鍵,不存內容),爬蟲之後跳過。**整院下架**:從 CronJob 的 `-sources` 拿掉該院,再執行 `SELECT takedown_personnel(id) FROM medical_personnel WHERE source_key LIKE '<來源>:%';`。
+  - **下架排除**:`takedown_personnel()` 下架官網醫師時,把它的 `source_key` 記進 `takedown_suppressions`(只存鍵,不存內容),爬蟲之後跳過;並清除同一個 `source_key` 所有 id 的歷史(醫師被爬蟲刪除後又加回會拿到新 id,舊 id 的歷史仍有內容)。醫師已被爬蟲刪除、主表沒有那一列時,用歷史裡的 id 一樣可以下架;找 id 用 `SELECT DISTINCT personnel_id FROM medical_personnel_history WHERE COALESCE(old_row, new_row)->>'name' = '<姓名>';`(部落格資料沒有 `source_key`,同一人若有多個 id 要逐一下架)。**整院下架**:從 CronJob 的 `-sources` 拿掉該院,再執行 `SELECT takedown_source('<來源>');`(包含已被爬蟲刪除、只剩歷史的醫師)。
   - 爬蟲使用 UA `popofinder-crawler/1.0 (+mailto:jerrychuang@jerrytech.me)`,執行時讀 robots.txt(被擋就停、遵守 Crawl-delay),同一 host 的每個請求(含 robots.txt)至少間隔 1 秒,不跟隨轉址(轉址會跳過 robots 檢查,當成抓取失敗);log 不記姓名與學歷:計畫只記數量,抓取失敗時記出錯頁面的網址(只含站內 ID),才知道是哪一頁壞掉。
   - parser 測試只用自製的合成 HTML(仿真實結構、虛構姓名),真實頁面不進 repo;另有 `-tags live` 的測試直接打官網,確認頁面結構沒變。
 - **理由**:
