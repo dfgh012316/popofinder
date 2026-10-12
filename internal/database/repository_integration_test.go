@@ -124,6 +124,32 @@ func TestSearchOrdersByDepartmentThenName(t *testing.T) {
 	}
 }
 
+// 臺 and 台 match each other in every compared column, typed either way (OD-13).
+func TestSearchMatchesBothTaiSpellings(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{
+		{"台北", "臺北榮民總醫院", "內科", "王小明"},
+		{"台北", "台北榮總", "心臟內科", "李小華"},
+		{"台中", "測試醫院", "臺式推拿科", "張小美"},
+		{"台中", "測試醫院", "內科", "張小臺"},
+	})
+
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"臺北@醫院 臺北榮", []string{"王小明", "李小華"}},
+		{"@醫院 台北榮", []string{"王小明", "李小華"}},
+		{"@科別 臺式", []string{"張小美"}},
+		{"張小台", []string{"張小臺"}},
+	}
+	for _, tt := range tests {
+		got, _, err := r.Search(search.ParseCriteria(tt.input), 0)
+		require.NoError(t, err)
+		require.Equal(t, tt.want, names(got), "input %s", tt.input)
+	}
+}
+
 func TestDirectoryHospitals(t *testing.T) {
 	r := openIntegrationDB(t)
 	r.db.MustExec(`INSERT INTO medical_personnel (city, hospital, department, name, source) VALUES

@@ -65,6 +65,20 @@ func TestParseCriteria(t *testing.T) {
 			wantTerm: "三總",
 			wantCity: nil,
 		},
+		{
+			name:     "臺 city and hospital term",
+			input:    "臺北@醫院 臺大醫院",
+			wantType: TypeHospital,
+			wantTerm: "台大醫院",
+			wantCity: strPtr("台北"),
+		},
+		{
+			name:     "臺 city with keyword",
+			input:    "臺中 陳",
+			wantType: TypeAll,
+			wantTerm: "陳",
+			wantCity: strPtr("台中"),
+		},
 	}
 
 	for _, tt := range tests {

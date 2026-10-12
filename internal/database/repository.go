@@ -12,9 +12,17 @@ import (
 
 const selectColumns = "id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at"
 
+// Columns compared with 臺 read as 台: ParseCriteria already turned 臺 into 台 in the
+// search term, and stored data spells it both ways (docs/open-decisions.md OD-13).
+const (
+	nameMatchCol       = "translate(name, '臺', '台')"
+	hospitalMatchCol   = "translate(hospital, '臺', '台')"
+	departmentMatchCol = "translate(department, '臺', '台')"
+)
+
 // matchRankExpr ranks a row for TypeAll ordering: 0 = name match, 1 = hospital match,
 // 2 = department-only match. It references $1, which Search always binds to the term.
-const matchRankExpr = "CASE WHEN name ILIKE $1 THEN 0 WHEN hospital ILIKE $1 THEN 1 ELSE 2 END"
+const matchRankExpr = "CASE WHEN " + nameMatchCol + " ILIKE $1 THEN 0 WHEN " + hospitalMatchCol + " ILIKE $1 THEN 1 ELSE 2 END"
 
 // tieBreakOrder orders rows within a search (and within each TypeAll match group).
 // Not id: blog rows were loaded first, so id order put the blog list ahead of every
@@ -82,11 +90,11 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 
 	switch criteria.SearchType {
 	case search.TypeAll:
-		whereClauses = append(whereClauses, fmt.Sprintf("(name ILIKE $%d OR hospital ILIKE $%d OR department ILIKE $%d)", argIdx, argIdx, argIdx))
+		whereClauses = append(whereClauses, fmt.Sprintf("(%[2]s ILIKE $%[1]d OR %[3]s ILIKE $%[1]d OR %[4]s ILIKE $%[1]d)", argIdx, nameMatchCol, hospitalMatchCol, departmentMatchCol))
 	case search.TypeHospital:
-		whereClauses = append(whereClauses, fmt.Sprintf("hospital ILIKE $%d", argIdx))
+		whereClauses = append(whereClauses, fmt.Sprintf("%s ILIKE $%d", hospitalMatchCol, argIdx))
 	case search.TypeDepartment:
-		whereClauses = append(whereClauses, fmt.Sprintf("department ILIKE $%d", argIdx))
+		whereClauses = append(whereClauses, fmt.Sprintf("%s ILIKE $%d", departmentMatchCol, argIdx))
 	}
 	args = append(args, term)
 	argIdx++

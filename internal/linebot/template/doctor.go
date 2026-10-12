@@ -26,7 +26,8 @@ func sourceLabel(ns sql.NullString) string {
 	if ns.Valid {
 		switch ns.String {
 		case "blog":
-			return "網路公開彙整"
+			// The blog stopped updating in 2025-03; its hospitals are often out of date (OD-13).
+			return "網路公開彙整（2025 年 3 月前）"
 		case "public_report":
 			return "民眾回報"
 		case "hospital_directory":
@@ -75,7 +76,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	eduRow := row("學歷", strOrDefault(p.Education), map[string]any{"wrap": true})
 	eduRow["margin"] = "md"
 
-	sourceRow := row("資料來源", sourceLabel(p.Source), nil)
+	sourceRow := row("資料來源", sourceLabel(p.Source), map[string]any{"wrap": true})
 	sourceRow["margin"] = "md"
 
 	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow}

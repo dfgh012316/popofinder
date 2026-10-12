@@ -2,6 +2,7 @@ package template
 
 import (
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,41 @@ func TestDoctorBubbleOmitsSourceURLWhenEmpty(t *testing.T) {
 	if !strings.Contains(s, "網路公開彙整") {
 		t.Fatalf("card JSON missing 網路公開彙整: %s", s)
 	}
+}
+
+func TestDoctorBubbleBlogSourceShowsDate(t *testing.T) {
+	raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:     "測試醫師",
+		City:     "台北市",
+		Hospital: "測試醫院",
+		Source:   sql.NullString{String: "blog", Valid: true},
+	}})
+	if err != nil {
+		t.Fatalf("DoctorsFlexMessage error: %v", err)
+	}
+	var msg map[string]any
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	carousel := msg["contents"].(map[string]any)
+	bubble := carousel["contents"].([]any)[0].(map[string]any)
+	rows := bubble["body"].(map[string]any)["contents"].([]any)
+
+	for _, r := range rows {
+		children := r.(map[string]any)["contents"].([]any)
+		if children[0].(map[string]any)["text"] != "資料來源" {
+			continue
+		}
+		value := children[1].(map[string]any)
+		if value["text"] != "網路公開彙整（2025 年 3 月前）" {
+			t.Fatalf("blog source label = %v", value["text"])
+		}
+		if value["wrap"] != true {
+			t.Fatalf("source value should wrap: %v", value)
+		}
+		return
+	}
+	t.Fatalf("card has no 資料來源 row: %s", raw)
 }
 
 func TestDoctorBubbleShowsCheckedDate(t *testing.T) {
