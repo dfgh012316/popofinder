@@ -2,6 +2,7 @@
 
 ## Completed Tasks
 
+- [2026-10-12] 正確性與資料清理（臺／台、部落格時效標示、一次性清理腳本） — 查詢時「臺」當「台」（`ParseCriteria` 換字＋`Search` 用 translate 欄位），部落格卡片標示「網路公開彙整（2025 年 3 月前）」，新增 `scripts/cleanup/2026-10-12-blog-cleanup.sql`（刪非執業者、刪未分類重複、合併部落格重複，附整合測試；production 由維護者執行），並追加 OD-13；詳見 docs/ARCHITECTURE.md。
 - [2026-10-12] 官網爬蟲第二批——雙和、馬偕、國泰 — 新增 `shh`、`mmh`（台北清單）、`cgh`（四院區、一人一筆取第一個院區）三個 Source 並註冊進 `cmd/crawl`，文字 helper 與科別彙整改為共用，學歷規則加「醫學學士」，OD-10 追加 5 則補註、盤點文件更正；詳見 docs/ARCHITECTURE.md。
 - [2026-10-12] 官網爬蟲框架＋亞東紀念醫院 — 新增 `internal/crawl`（遵守 robots.txt 的 Fetcher、學歷規則、帶刪除保護與下架排除的純函式 `BuildSyncPlan`、亞東 parser）與 `cmd/crawl`／image `/crawl`，migration 0007 加 `source_key`、`takedown_suppressions`、只改查到日期不記歷史，並追加 OD-10；詳見 docs/ARCHITECTURE.md。
 - [2026-10-12] 下架機制（寄信申請＋`takedown_personnel()`） — migration 0006 新增一次完成 OD-8 下架程序的 SQL function（id 不存在時報錯回滾），說明卡加上「下架與更正」寄信管道，並追加 OD-9；詳見 docs/ARCHITECTURE.md。
