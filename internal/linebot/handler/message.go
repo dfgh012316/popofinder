@@ -117,6 +117,10 @@ func buildSearchResponse(criteria search.Criteria, personnel []database.MedicalP
 	return messages, nil
 }
 
+// coverageNote ends every summary that has results (OD-11): the data now covers
+// doctors educated in Taiwan as well as abroad, so a match by itself means nothing.
+const coverageNote = "收錄台灣與國外畢業的醫師，學歷請以卡片為準"
+
 func formatSummary(criteria search.Criteria, stats database.SearchStats) string {
 	var location string
 	if criteria.City != nil {
@@ -159,7 +163,7 @@ func formatSummary(criteria search.Criteria, stats database.SearchStats) string 
 	if end > stats.TotalCount {
 		end = stats.TotalCount
 	}
-	return fmt.Sprintf("%s\n%s\n目前顯示第 %d - %d 筆", header, countLine, start, end)
+	return fmt.Sprintf("%s\n%s\n目前顯示第 %d - %d 筆\n%s", header, countLine, start, end, coverageNote)
 }
 
 // zeroResultActions suggests next steps when a search finds nothing: widen a narrowed

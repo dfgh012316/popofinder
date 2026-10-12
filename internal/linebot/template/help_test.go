@@ -2,6 +2,7 @@ package template
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -57,4 +58,15 @@ func TestHelpFlexMessageTakedownContact(t *testing.T) {
 	for _, want := range []string{"下架與更正", "jerrychuang@jerrytech.me", "可證明身分的資料"} {
 		require.Contains(t, s, want)
 	}
+}
+
+func TestHelpFlexMessageCoverage(t *testing.T) {
+	raw, err := HelpFlexMessage()
+	require.NoError(t, err)
+	s := string(raw)
+
+	for _, want := range []string{"收錄範圍", "台灣與國外畢業的都有", "查不到也不代表什麼"} {
+		require.Contains(t, s, want)
+	}
+	require.Less(t, strings.Index(s, "收錄範圍"), strings.Index(s, "支援格式"), "coverage comes before the usage formats")
 }
