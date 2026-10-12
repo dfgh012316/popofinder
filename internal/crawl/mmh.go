@@ -17,6 +17,7 @@ var (
 	mmhCountRe     = regexp.MustCompile(`<h6>共 (\d+) 名</h6>`)
 	mmhAreaRe      = regexp.MustCompile(`DMZWEBEMRA651/Default\.aspx\?a=(TP|TS)`)
 	mmhNameRe      = regexp.MustCompile(`(?s)<h2 class="event-hed-title">(.*?)</h2>`)
+	mmhRoleRe      = regexp.MustCompile(`^\s*[(（][^)）]*[)）]`)
 	mmhEducationRe = regexp.MustCompile(`(?s)<h2 class="event-ch-title">主要學歷</h2>\s*<ul class="info-list">(.*?)</ul>\s*<h2 class="event-ch-title">`)
 	mmhBreakRe     = regexp.MustCompile(`(?i)<br\s*/?>|</p>|</li>|</div>`)
 )
@@ -78,8 +79,9 @@ func parseMmhList(page string) ([]mmhEntry, error) {
 // block has nil education.
 func parseMmhProfile(page string) (name string, education []string, err error) {
 	if m := mmhNameRe.FindStringSubmatch(page); m != nil {
-		// Some headings add an English name or degrees: "姓名(English Name)", "姓名,English Name,M.D.".
-		n := htmlText(m[1])
+		// Some headings start with a role, "(顧問)姓名", or add an English name or degrees:
+		// "姓名(English Name)", "姓名,English Name,M.D.".
+		n := mmhRoleRe.ReplaceAllString(htmlText(m[1]), "")
 		if i := strings.IndexAny(n, "(（,"); i >= 0 {
 			n = n[:i]
 		}
