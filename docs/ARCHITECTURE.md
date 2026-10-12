@@ -2,6 +2,11 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — 臺／台查詢互通、`scripts/cleanup/` 一次性資料清理
+- 「臺」當「台」：`ParseCriteria` 先把輸入的「臺」換成「台」；`Search` 比對時用常數 `nameMatchCol`／`hospitalMatchCol`／`departmentMatchCol`（`translate(<欄位>, '臺', '台')`），`matchRankExpr` 也用同一組。資料不改。`TestSearchMatchesBothTaiSpellings` 涵蓋三個欄位與縣市前綴。
+- 新目錄 `scripts/cleanup/`：一次性資料清理腳本，只寫規則、不含具名內容；不放進 `migrations/`（不會在部署時自動執行），由維護者以 `psql -1 -v ON_ERROR_STOP=1 -f` 執行，每步各設 `popo.change_reason`。第一支 `scripts/cleanup/2026-10-12-blog-cleanup.sql`（OD-13），`TestBlogCleanupScript` 用虛構資料驗證規則與重跑不再變動。
+- 部落格卡片的資料來源顯示「網路公開彙整（2025 年 3 月前）」，資料來源列改為可換行。
+
 ### 2026-10-12 — 查詢排序改為科別 → 姓名 → id；「醫院清單」指令
 - `Search` 的排序依據改為常數 `tieBreakOrder`（`department, name, id`）：`TypeAll` 為 `matchRankExpr, department, name, id`，`@` 類型為 `department, name, id`，取代下面「全欄位查詢」那條寫的「`id` 為次；`@` 類型依 `id`」。理由（依 id 會讓部落格資料永遠排在官網資料前）見 open-decisions OD-12；`TestSearchOrdersByDepartmentThenName` 涵蓋三種查詢類型。
 - 新 `Repository.DirectoryHospitals`（`source='hospital_directory'` 依縣市＋醫院分組計數）與 `template.HospitalListFlexMessage`；文字指令常數 `template.HospitalListCommand`（「醫院清單」）同時供 handler、說明卡文字與 Quick Reply 使用。每顆按鈕送出「縣市@醫院 醫院名稱」，`TestHospitalListFlexMessageButtonsSearchHospital` 以 `search.ParseCriteria` 釘住點下去就是該院該縣市的醫院查詢。不寫 `search_log`。
