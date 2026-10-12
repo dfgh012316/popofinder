@@ -16,6 +16,11 @@ const selectColumns = "id, city, hospital, department, name, education, source, 
 // 2 = department-only match. It references $1, which Search always binds to the term.
 const matchRankExpr = "CASE WHEN name ILIKE $1 THEN 0 WHEN hospital ILIKE $1 THEN 1 ELSE 2 END"
 
+// tieBreakOrder orders rows within a search (and within each TypeAll match group).
+// Not id: blog rows were loaded first, so id order put the blog list ahead of every
+// hospital-directory row (docs/open-decisions.md OD-12).
+const tieBreakOrder = "department, name, id"
+
 type MedicalPersonnel struct {
 	ID                 int            `db:"id"`
 	City               string         `db:"city"`
@@ -42,6 +47,14 @@ type SearchStats struct {
 	TotalPages  int
 	HasMore     bool
 	MatchCounts MatchCounts // populated only for search.TypeAll
+}
+
+// DirectoryHospital is one hospital whose official doctor directory is crawled
+// (source = 'hospital_directory'), with how many doctors it contributes.
+type DirectoryHospital struct {
+	City     string `db:"city"`
+	Hospital string `db:"hospital"`
+	Count    int    `db:"count"`
 }
 
 type Repository struct {
@@ -110,9 +123,9 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 	totalCount := counts.Total
 
 	// Data query
-	orderBy := "id"
+	orderBy := tieBreakOrder
 	if criteria.SearchType == search.TypeAll {
-		orderBy = matchRankExpr + ", id"
+		orderBy = matchRankExpr + ", " + tieBreakOrder
 	}
 	dataSQL := fmt.Sprintf(
 		"SELECT "+selectColumns+" FROM medical_personnel %s ORDER BY %s LIMIT 10 OFFSET $%d",
@@ -151,4 +164,16 @@ func (r *Repository) LogSearch(ctx context.Context, criteria search.Criteria, re
 		return fmt.Errorf("repository: log search: %w", err)
 	}
 	return nil
+}
+
+// DirectoryHospitals lists the hospitals with crawled official directories, largest first.
+func (r *Repository) DirectoryHospitals(ctx context.Context) ([]DirectoryHospital, error) {
+	var hs []DirectoryHospital
+	err := r.db.SelectContext(ctx, &hs,
+		"SELECT city, hospital, COUNT(*) AS count FROM medical_personnel WHERE source = 'hospital_directory' GROUP BY city, hospital ORDER BY count DESC, hospital",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: directory hospitals: %w", err)
+	}
+	return hs, nil
 }

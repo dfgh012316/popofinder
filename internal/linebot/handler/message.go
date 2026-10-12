@@ -49,6 +49,19 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{helpMsg})
 	}
 
+	// Hospital list command (OD-12)
+	if text == template.HospitalListCommand {
+		hospitals, err := repo.DirectoryHospitals(ctx)
+		if err != nil {
+			return err
+		}
+		listMsg, err := template.HospitalListFlexMessage(hospitals)
+		if err != nil {
+			return err
+		}
+		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{listMsg})
+	}
+
 	// Ignore report command
 	if lower == "回報" || lower == "report" {
 		return nil
