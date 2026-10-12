@@ -2,6 +2,13 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — 官網爬蟲第二批：雙和、馬偕、國泰
+- 新 `Source`：`Shh`（雙和，`shh:<docCode>`）、`Mmh`（馬偕台北清單，`mmh:<did>`）、`Cgh`（國泰總院／汐止／新竹／內湖，`cgh:<prodid>`），已註冊進 `cmd/crawl`。長庚另開 task。
+- **共用 helper**：`crawl.go` 的 `htmlText`、`tagRe`、`listItemRe` 與 `doctorIndex`（醫師 ID → 第一次出現的科別碼＋依序累積的科別名稱；個人頁用第一個科別抓）由 femh／shh／cgh 共用；測試共用 `testutil_test.go` 的 `readFixture`、`serveFixture`。新來源不要再抄一份。
+- **多院區一人一筆**（OD-10 補註）：同一醫院體系的醫師 ID 跨院區共用時，依固定院區順序取第一個列出他的院區當醫院、縣市與科別，`source_key` 不含院區。`Cgh` 一個院區抓完再換下一個（`taken` map 跨院區傳遞），同 host 連續請求。
+- **0 位就失敗**：某院區（國泰，計入已被前面院區收走的 ID）或整個來源解析出 0 位醫師時 `Crawl` 回 error——小院區被改版清空時，`BuildSyncPlan`「不到一半」的刪除保護以整個來源計算，擋不住。馬偕另外要求清單的院區標記是 `TP`、「共 N 名」等於解析筆數。
+- 學歷規則加「醫學學士」（`isMedicalDegreeLine`）。
+
 ### 2026-10-12 — 官網爬蟲框架（`cmd/crawl` + `internal/crawl`）＋亞東
 - 新 package `internal/crawl`：`Source` 介面（`Name`、`Crawl`，任一頁失敗就回 error、不回部分結果）、`Fetcher`（UA `popofinder-crawler/1.0 (+mailto:…)`、每 host 讀一次 robots.txt、同 host 的每個請求（含 robots.txt）間隔 `max(minInterval, Crawl-delay)`、不跟隨轉址（3xx 當成失敗，避免轉址跳過 robots 檢查）、網路錯誤與 5xx 在 10 秒／30 秒後各重試一次（`retryWaits`）、非 200 回 error、不支援並行）、學歷規則 `hasMedicalDegree`（OD-10）、純函式 `BuildSyncPlan`（insert／update／只改日期的 touch／delete、排除清單、無醫學學位跳過、符合條件數 ×2 < 現有數時不刪並設 `DeleteBlocked`）。新增醫院＝新的 `Source` 實作，加進 `cmd/crawl` 的 `registry`。第一個實作 `Femh`（亞東：索引→科別→個人頁，以站內 DoctorID 為鍵）。
 - **新依賴** `github.com/temoto/robotstxt v1.1.2`：robots.txt 回 5xx 時 `FindGroup().Test()` 會判定為允許，必須用 `TestAgent`（`TestFetcherTreatsRobots5xxAsDisallow` 釘住）。
