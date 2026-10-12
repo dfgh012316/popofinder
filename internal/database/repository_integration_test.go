@@ -86,7 +86,7 @@ func TestSearchAllFieldsWithCity(t *testing.T) {
 	require.Equal(t, MatchCounts{Name: 2, Hospital: 2, Department: 0}, stats.MatchCounts)
 }
 
-func TestSearchHospitalTypeOrdersByID(t *testing.T) {
+func TestSearchHospitalTypeMatchCounts(t *testing.T) {
 	r := openIntegrationDB(t)
 	seedPersonnel(t, r, sharedSeed)
 
@@ -95,6 +95,51 @@ func TestSearchHospitalTypeOrdersByID(t *testing.T) {
 	require.Equal(t, []string{"王小明", "陳大文", "張三"}, names(got))
 	require.Equal(t, 3, stats.TotalCount)
 	require.Equal(t, MatchCounts{}, stats.MatchCounts)
+}
+
+// Every search type orders by department, then name, then id — never by id alone, which
+// would put rows loaded earlier (the blog list) ahead of later hospital-directory rows (OD-12).
+func TestSearchOrdersByDepartmentThenName(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{
+		{"新北", "甲醫院", "骨科", "王小明"},
+		{"新北", "甲醫院", "牙科", "陳大文"},
+		{"新北", "甲醫院", nil, "林一"},
+		{"新北", "甲醫院", "骨科", "張小美"},
+		{"新北", "甲醫院", "牙科", "李小華"},
+	})
+
+	tests := []struct {
+		criteria search.Criteria
+		want     []string
+	}{
+		{search.Criteria{SearchType: search.TypeHospital, SearchTerm: "甲醫院"}, []string{"李小華", "陳大文", "張小美", "王小明", "林一"}},
+		{search.Criteria{SearchType: search.TypeAll, SearchTerm: "甲醫院"}, []string{"李小華", "陳大文", "張小美", "王小明", "林一"}},
+		{search.Criteria{SearchType: search.TypeDepartment, SearchTerm: "科"}, []string{"李小華", "陳大文", "張小美", "王小明"}},
+	}
+	for _, tt := range tests {
+		got, _, err := r.Search(tt.criteria, 0)
+		require.NoError(t, err)
+		require.Equal(t, tt.want, names(got), "search type %s", tt.criteria.SearchType)
+	}
+}
+
+func TestDirectoryHospitals(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec(`INSERT INTO medical_personnel (city, hospital, department, name, source) VALUES
+		('台北', '甲醫院', '內科', '王小明', 'hospital_directory'),
+		('新北', '乙醫院', '內科', '李小華', 'hospital_directory'),
+		('新北', '乙醫院', '牙科', '張小美', 'hospital_directory'),
+		('新北', '乙醫院', '牙科', '陳大文', 'blog'),
+		('台北', '丙醫院', '內科', '林一', 'blog'),
+		('台北', '丁醫院', '內科', '林二', NULL)`)
+
+	got, err := r.DirectoryHospitals(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []DirectoryHospital{
+		{City: "新北", Hospital: "乙醫院", Count: 2},
+		{City: "台北", Hospital: "甲醫院", Count: 1},
+	}, got)
 }
 
 func TestSearchPaginationStable(t *testing.T) {

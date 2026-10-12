@@ -2,6 +2,10 @@
 
 ## Recent Architectural Decisions
 
+### 2026-10-12 — 查詢排序改為科別 → 姓名 → id；「醫院清單」指令
+- `Search` 的排序依據改為常數 `tieBreakOrder`（`department, name, id`）：`TypeAll` 為 `matchRankExpr, department, name, id`，`@` 類型為 `department, name, id`，取代下面「全欄位查詢」那條寫的「`id` 為次；`@` 類型依 `id`」。理由（依 id 會讓部落格資料永遠排在官網資料前）見 open-decisions OD-12；`TestSearchOrdersByDepartmentThenName` 涵蓋三種查詢類型。
+- 新 `Repository.DirectoryHospitals`（`source='hospital_directory'` 依縣市＋醫院分組計數）與 `template.HospitalListFlexMessage`；文字指令常數 `template.HospitalListCommand`（「醫院清單」）同時供 handler、說明卡文字與 Quick Reply 使用。每顆按鈕送出「縣市@醫院 醫院名稱」，`TestHospitalListFlexMessageButtonsSearchHospital` 以 `search.ParseCriteria` 釘住點下去就是該院該縣市的醫院查詢。不寫 `search_log`。
+
 ### 2026-10-12 — 官網爬蟲第二批：雙和、馬偕、國泰
 - 新 `Source`：`Shh`（雙和，`shh:<docCode>`）、`Mmh`（馬偕台北清單，`mmh:<did>`）、`Cgh`（國泰總院／汐止／新竹／內湖，`cgh:<prodid>`），已註冊進 `cmd/crawl`。長庚另開 task。
 - **共用 helper**：`crawl.go` 的 `htmlText`、`tagRe`、`listItemRe` 與 `doctorIndex`（醫師 ID → 第一次出現的科別碼＋依序累積的科別名稱；個人頁用第一個科別抓）由 femh／shh／cgh 共用；測試共用 `testutil_test.go` 的 `readFixture`、`serveFixture`。新來源不要再抄一份。

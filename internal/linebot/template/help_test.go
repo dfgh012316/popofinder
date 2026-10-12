@@ -28,7 +28,7 @@ func TestHelpFlexMessageQuickReply(t *testing.T) {
 		require.LessOrEqual(t, utf8.RuneCountInString(item.Action["label"]), 20, "label too long: %s", item.Action["label"])
 		texts = append(texts, item.Action["text"])
 	}
-	require.Equal(t, []string{"陳", "三總", "台北 牙科"}, texts)
+	require.Equal(t, []string{"陳", "三總", "台北 牙科", "醫院清單"}, texts)
 }
 
 func TestHelpFlexMessageUsageText(t *testing.T) {
@@ -43,6 +43,8 @@ func TestHelpFlexMessageUsageText(t *testing.T) {
 		"例如：台北 牙科",
 		"[城市]@醫院 醫院名稱",
 		"[城市]@科別 科別名稱",
+		"輸入「醫院清單」看已收錄官網醫師名單的醫院",
+		"例如：台北@科別 心臟（打部分字即可",
 		"支援城市",
 	} {
 		require.Contains(t, s, want)

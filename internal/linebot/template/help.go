@@ -115,6 +115,15 @@ var helpContents = map[string]any{
 									map[string]any{"type": "text", "text": "例如：台北@醫院 三總", "size": "sm", "color": "#666666", "flex": 5},
 								},
 							},
+							// Hospital list (OD-12): which hospitals have their official directory crawled.
+							map[string]any{
+								"type":   "box",
+								"layout": "baseline",
+								"contents": []any{
+									map[string]any{"type": "text", "text": "📋", "size": "sm", "color": "#666666", "flex": 1},
+									map[string]any{"type": "text", "text": "輸入「" + HospitalListCommand + "」看已收錄官網醫師名單的醫院", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+								},
+							},
 						},
 					},
 					map[string]any{"type": "separator", "margin": "lg"},
@@ -137,7 +146,7 @@ var helpContents = map[string]any{
 								"layout": "baseline",
 								"contents": []any{
 									map[string]any{"type": "text", "text": "💡", "size": "sm", "color": "#666666", "flex": 1},
-									map[string]any{"type": "text", "text": "例如：台北@科別 牙科", "size": "sm", "color": "#666666", "flex": 5},
+									map[string]any{"type": "text", "text": "例如：台北@科別 心臟（打部分字即可，會找到心臟內科、心臟血管外科等）", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
 								},
 							},
 						},
@@ -182,12 +191,13 @@ var helpContents = map[string]any{
 	},
 }
 
-// helpQuickReply offers tappable example searches. Examples use a surname, a hospital
-// short name, and a department only — never a real doctor's full name (OD-6).
+// helpQuickReply offers tappable example searches and the hospital list. Examples use a
+// surname, a hospital short name, and a department only — never a real doctor's full name (OD-6).
 var helpQuickReply = []QuickReplyAction{
 	{Label: "範例：陳", Text: "陳"},
 	{Label: "範例：三總", Text: "三總"},
 	{Label: "範例：台北 牙科", Text: "台北 牙科"},
+	{Label: HospitalListCommand, Text: HospitalListCommand},
 }
 
 // HelpFlexMessage returns the raw JSON for the help usage message with example quick replies.
