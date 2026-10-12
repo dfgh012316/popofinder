@@ -18,6 +18,7 @@ func TestIsMedicalDegreeLine(t *testing.T) {
 		{"西班牙埃雷拉大學牙醫學士", true},
 		{"中國醫藥大學中醫學系", true},
 		{"高雄醫學大學學士後醫學系", true},
+		{"長庚大學醫學學士", true},
 		{"波蘭盧布林醫學大學", true},
 		{"國立陽明大學醫學院", true},
 		{"Doctor of Medicine, University of the Philippines", true},

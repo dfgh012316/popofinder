@@ -21,8 +21,6 @@ var (
 	femhDoctorIDRe  = regexp.MustCompile(`sectionDetail2\.aspx\?CID=\w+(?:&amp;|&)+DoctorID=(\w+)`)
 	femhTitleRe     = regexp.MustCompile(`(?s)<title>(.*?)</title>`)
 	femhEducationRe = regexp.MustCompile(`(?s)class=["']h5 color-g name["']>\s*學歷\s*</div>\s*<ul>(.*?)</ul>`)
-	femhItemRe      = regexp.MustCompile(`(?s)<li>(.*?)</li>`)
-	femhTagRe       = regexp.MustCompile(`<[^>]*>`)
 )
 
 // Femh crawls 亞東紀念醫院 (www.femh.org.tw): index → department pages → profile pages.
@@ -51,17 +49,13 @@ func (s *Femh) profileURL(cid, doctorID string) string {
 	return s.baseURL + "/section/sectionDetail2.aspx?CID=" + cid + "&&DoctorID=" + doctorID
 }
 
-func femhText(raw string) string {
-	return strings.TrimSpace(html.UnescapeString(femhTagRe.ReplaceAllString(raw, "")))
-}
-
 // parseFemhIndex returns the departments linked from the index in page order,
 // deduped by CID and without the excluded units.
 func parseFemhIndex(page string) []femhDept {
 	var depts []femhDept
 	seen := map[string]bool{}
 	for _, m := range femhIndexLinkRe.FindAllStringSubmatch(page, -1) {
-		cid, name := m[1], femhText(m[2])
+		cid, name := m[1], htmlText(m[2])
 		if seen[cid] {
 			continue
 		}
@@ -103,8 +97,8 @@ func parseFemhProfile(page string) (name string, education []string, err error) 
 		return "", nil, fmt.Errorf("crawl: femh profile without name")
 	}
 	if m := femhEducationRe.FindStringSubmatch(page); m != nil {
-		for _, li := range femhItemRe.FindAllStringSubmatch(m[1], -1) {
-			if s := femhText(li[1]); s != "" {
+		for _, li := range listItemRe.FindAllStringSubmatch(m[1], -1) {
+			if s := htmlText(li[1]); s != "" {
 				education = append(education, s)
 			}
 		}
@@ -124,35 +118,23 @@ func (s *Femh) Crawl(ctx context.Context) ([]Doctor, error) {
 		return nil, fmt.Errorf("crawl: femh index has no departments")
 	}
 
-	type doctorDepts struct {
-		firstCID string
-		names    []string
-	}
-	var order []string
-	byID := map[string]*doctorDepts{}
+	x := newDoctorIndex()
 	for _, d := range depts {
 		page, err := s.fetcher.Get(ctx, s.deptURL(d.CID))
 		if err != nil {
 			return nil, fmt.Errorf("crawl: femh department %s: %w", d.CID, err)
 		}
 		for _, id := range parseFemhDept(page) {
-			dd, ok := byID[id]
-			if !ok {
-				dd = &doctorDepts{firstCID: d.CID}
-				byID[id] = dd
-				order = append(order, id)
-			}
-			dd.names = append(dd.names, d.Name)
+			x.add(id, d.CID, d.Name)
 		}
 	}
-	if len(order) == 0 {
+	if len(x.order) == 0 {
 		return nil, fmt.Errorf("crawl: femh found no doctors")
 	}
 
-	doctors := make([]Doctor, 0, len(order))
-	for _, id := range order {
-		dd := byID[id]
-		u := s.profileURL(dd.firstCID, id)
+	doctors := make([]Doctor, 0, len(x.order))
+	for _, id := range x.order {
+		u := s.profileURL(x.first[id], id)
 		page, err := s.fetcher.Get(ctx, u)
 		if err != nil {
 			return nil, fmt.Errorf("crawl: femh doctor %s: %w", id, err)
@@ -166,7 +148,7 @@ func (s *Femh) Crawl(ctx context.Context) ([]Doctor, error) {
 			Name:        name,
 			City:        femhCity,
 			Hospital:    femhHospital,
-			Departments: dd.names,
+			Departments: x.depts[id],
 			Education:   education,
 			URL:         u,
 		})
