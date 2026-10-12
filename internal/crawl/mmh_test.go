@@ -64,6 +64,14 @@ func TestParseMmhProfile(t *testing.T) {
 	require.Equal(t, "張小美", name)
 	require.Nil(t, education)
 
+	// An English name or degrees after the name are dropped.
+	for _, heading := range []string{"王小明(Hsiao-Ming Wang)", "王小明（小明）", "王小明,Hsiao-Ming Wang(Ming),M.D."} {
+		page := strings.Replace(readFixture(t, "mmh", "profile_1001.html"), ">王小明<", ">"+heading+"<", 1)
+		name, _, err = parseMmhProfile(page)
+		require.NoError(t, err)
+		require.Equal(t, "王小明", name)
+	}
+
 	_, _, err = parseMmhProfile("<html></html>")
 	require.Error(t, err)
 }

@@ -13,9 +13,9 @@ const (
 )
 
 var (
-	// 營養、藥劑、心理諮商 are not doctors; the 健檢 and 代謝及體重 centers list
-	// doctors again under a second docCode.
-	shhExcludedDept = regexp.MustCompile("營養|藥劑|心理諮商|健檢|健康檢查|代謝及體重")
+	// 營養、藥劑、心理諮商 are not doctors; the 健檢 and 代謝及體重 centers and the
+	// 疼痛、美容醫學、睡眠障礙 clinics list doctors again under a second docCode.
+	shhExcludedDept = regexp.MustCompile("營養|藥劑|心理諮商|健檢|健康檢查|代謝及體重|疼痛特別門診|美容醫學|睡眠障礙門診")
 
 	shhIndexLinkRe = regexp.MustCompile(`(?s)<a[^>]*href=["'](?:\.\./page/|/page/)?ShhregTable\.aspx\?deptCode=(\w+)(?:&(?:amp;)?type=\d+)?["'][^>]*>(.*?)</a>`)
 	shhDoctorIDRe  = regexp.MustCompile(`TeamDocDetail\.aspx\?deptCode=\w+(?:&amp;|&)docCode=(\w+)`)
