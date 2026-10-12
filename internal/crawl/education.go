@@ -26,8 +26,8 @@ func isMedicalDegreeLine(line string) bool {
 	if excludeRe.MatchString(line) {
 		return false
 	}
-	// Covers 牙醫學系, 中醫學系, 學士後醫學系 and 牙醫學士.
-	if strings.Contains(line, "醫學系") || strings.Contains(line, "醫學士") {
+	// Covers 牙醫學系, 中醫學系, 學士後醫學系, 牙醫學士 and 醫學學士.
+	if strings.Contains(line, "醫學系") || strings.Contains(line, "醫學士") || strings.Contains(line, "醫學學士") {
 		return true
 	}
 	// A bare 醫學院/醫學大學 counts, but not another 學系 at a medical university (e.g. 藥學系).
