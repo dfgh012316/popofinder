@@ -11,7 +11,9 @@ import (
 // (docs/open-decisions.md OD-14). Written with 台 only: ParseCriteria and
 // Repository.Search read 臺 as 台. Never put a crawled hospital's full name here
 // when the group also matches other hospitals: the 「同院同科醫師」 button searches
-// with that name, and 高雄醫學大學附設中和紀念醫院 must not pull in 高醫岡山醫院.
+// with that name, and 高雄醫學大學附設中和紀念醫院 must not pull in 高醫岡山醫院. Nor a
+// name that starts a crawled full name (林口長庚): the word would be split into
+// 林口長庚 and 紀念醫院, and no longer find the blog's 林口長庚 rows.
 var hospitalAliasGroups = []struct {
 	names, also []string
 }{
@@ -22,17 +24,22 @@ var hospitalAliasGroups = []struct {
 	{names: []string{"榮總", "榮民總醫院"}},
 	{names: []string{"台大", "台大醫院", "台大附醫", "台灣大學醫學院附設醫院"}},
 	{names: []string{"北醫", "北醫附醫", "北醫附設醫院", "台北醫學大學附設醫院"}},
-	{names: []string{"中國附醫", "中國醫", "中國醫大", "中國醫大附醫", "中國醫藥大學附設醫院"}},
+	{names: []string{"中國附醫", "中國醫", "中國醫大", "中國醫大附醫", "中醫大", "中醫大附醫", "中國醫藥大學附設醫院"}},
 	{names: []string{"中山附醫", "中山醫大", "中山醫大附醫", "中山醫學大學附設醫院"}, also: []string{"中山醫學大學"}},
 	{names: []string{"彰基", "彰化基督教醫院"}, also: []string{"彰化基督教"}},
 	{names: []string{"員基", "員林基督教醫院"}, also: []string{"員林基督教"}},
 	{names: []string{"嘉基", "嘉義基督教醫院"}, also: []string{"嘉義基督教"}},
+	{names: []string{"屏基", "屏東基督教醫院"}, also: []string{"屏東基督教"}},
 	{names: []string{"成大", "成大醫院", "成大附醫", "成功大學醫學院附設醫院"}},
 	{names: []string{"高醫", "高醫附醫", "高雄醫學大學附設醫院"}, also: []string{"中和紀念醫院", "高雄醫學大學附設"}},
+	{names: []string{"林長"}, also: []string{"林口長庚"}},
+	{names: []string{"高長"}, also: []string{"高雄長庚"}},
 	{names: []string{"土城長庚", "土城醫院"}},
 	{names: []string{"台北慈濟", "新店慈濟"}},
+	{names: []string{"花慈", "花蓮慈濟"}},
 	{names: []string{"北市聯醫", "市聯醫", "台北聯醫", "台北市立聯合醫院"}, also: []string{"台北聯合醫院"}},
-	{names: []string{"部桃", "部立桃園醫院", "衛福部桃園醫院", "衛生福利部桃園醫院"}, also: []string{"桃園醫院"}},
+	{names: []string{"部桃", "署桃", "部立桃園醫院", "衛福部桃園醫院", "衛生福利部桃園醫院"}, also: []string{"桃園醫院"}},
+	{names: []string{"部北", "署北", "部立台北醫院", "衛福部台北醫院", "衛生福利部台北醫院"}, also: []string{"台北醫院"}},
 	{names: []string{"陽明交大附醫", "陽明附醫", "陽大附醫", "陽明交通大學附設醫院"}},
 	{names: []string{"802", "802醫院", "國軍高雄總醫院"}},
 }

@@ -30,6 +30,7 @@ func TestHospitalPatterns(t *testing.T) {
 		{"三總", []string{"三總", "三軍總院", "三軍總醫院", "內湖三總", "國防醫學院三軍總醫院"}},
 		{"內湖三總", []string{"三總", "三軍總院", "三軍總醫院", "內湖三總", "國防醫學院三軍總醫院"}},
 		{"高醫", []string{"高醫", "高醫附醫", "高雄醫學大學附設醫院", "中和紀念醫院", "高雄醫學大學附設"}},
+		{"林長", []string{"林長", "林口長庚"}},
 		// 紀念 or 綜合 dropped: matches 林口長庚, 亞東醫院, 國泰醫院 too.
 		{"林口長庚紀念醫院", []string{"林口長庚紀念醫院", "林口長庚"}},
 		{"國泰綜合醫院", []string{"國泰綜合醫院", "國泰"}},
@@ -49,6 +50,15 @@ func TestHospitalPatterns(t *testing.T) {
 			assert.Equal(t, tt.want, HospitalPatterns(tt.term))
 		})
 	}
+}
+
+// Crawled full names stay one word, so HospitalPatterns can drop 紀念/綜合 from them.
+func TestSplitHospitalAliasKeepsCrawledNames(t *testing.T) {
+	for _, name := range []string{"林口長庚紀念醫院", "高雄長庚紀念醫院", "高雄醫學大學附設中和紀念醫院", "國泰綜合醫院", "新北市立土城醫院", "台北長庚紀念醫院"} {
+		assert.Equal(t, []string{name}, splitHospitalAlias(name))
+	}
+	assert.Equal(t, []string{"三總", "牙科"}, splitHospitalAlias("三總牙科"))
+	assert.Equal(t, []string{"林長", "心臟內科"}, splitHospitalAlias("林長心臟內科"))
 }
 
 func TestCriteriaTerms(t *testing.T) {
