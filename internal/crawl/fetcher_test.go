@@ -2,6 +2,7 @@ package crawl
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -233,6 +234,10 @@ func TestFetcherRejectsOversizedBody(t *testing.T) {
 	}
 }
 
+// truncatedBody as a test status makes the server send half a body and hang up,
+// a network error that net/http does not retry by itself.
+const truncatedBody = -1
+
 func TestFetcherRetriesServerErrors(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -241,10 +246,13 @@ func TestFetcherRetriesServerErrors(t *testing.T) {
 		wantErr   string
 		wantHits  int
 		wantWaits []time.Duration
+		// wantUnavailable: the error is errUnavailable, which Cgmh skips
+		wantUnavailable bool
 	}{
-		{"transient 500 then 200", 2, http.StatusInternalServerError, "", 3, retryWaits},
-		{"500 on every attempt", 99, http.StatusInternalServerError, "status 500", 3, retryWaits},
-		{"404 is not retried", 99, http.StatusNotFound, "status 404", 1, nil},
+		{"transient 500 then 200", 2, http.StatusInternalServerError, "", 3, retryWaits, false},
+		{"500 on every attempt", 99, http.StatusInternalServerError, "status 500", 3, retryWaits, true},
+		{"network error on every attempt", 99, truncatedBody, "unexpected EOF", 3, retryWaits, true},
+		{"404 is not retried", 99, http.StatusNotFound, "status 404", 1, nil, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -255,6 +263,11 @@ func TestFetcherRetriesServerErrors(t *testing.T) {
 					http.NotFound(w, r)
 				case "/page":
 					hits++
+					if hits <= c.failures && c.status == truncatedBody {
+						w.Header().Set("Content-Length", "100")
+						w.Write([]byte("partial"))
+						return
+					}
 					if hits <= c.failures {
 						w.WriteHeader(c.status)
 						return
@@ -274,6 +287,7 @@ func TestFetcherRetriesServerErrors(t *testing.T) {
 			} else {
 				require.ErrorContains(t, err, c.wantErr)
 			}
+			require.Equal(t, c.wantUnavailable, errors.Is(err, errUnavailable))
 			require.Equal(t, c.wantHits, hits)
 			require.Equal(t, c.wantWaits, waits)
 		})

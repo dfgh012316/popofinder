@@ -26,6 +26,10 @@ var retryWaits = []time.Duration{10 * time.Second, 30 * time.Second}
 // errBodyTooLarge is not retried: the same page would be too large again.
 var errBodyTooLarge = fmt.Errorf("body exceeds %d bytes", maxBodyBytes)
 
+// errUnavailable marks a page that failed every retry with a network error or a
+// 5xx. A source fails on it unless it skips such pages (Cgmh).
+var errUnavailable = errors.New("page unavailable after retries")
+
 // Fetcher GETs pages with an identifiable User-Agent, obeys each host's robots.txt
 // (including Crawl-delay) and spaces out every request to the same host, the
 // robots.txt fetch included. It never follows redirects. It is not safe for
@@ -54,7 +58,8 @@ func NewFetcher(minInterval time.Duration) *Fetcher {
 }
 
 // Get returns the body of rawURL, or an error if robots.txt disallows it or the
-// response status is not 200.
+// response status is not 200. A page that still hits a network error or a 5xx
+// after the retries is an errUnavailable error.
 func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -89,7 +94,13 @@ func (f *Fetcher) Get(ctx context.Context, rawURL string) (string, error) {
 
 	status, body, err := f.doWithRetry(ctx, host, rawURL)
 	if err != nil {
-		return "", err
+		if errors.Is(err, errBodyTooLarge) || ctx.Err() != nil {
+			return "", err
+		}
+		return "", fmt.Errorf("%w: %w", err, errUnavailable)
+	}
+	if status >= 500 {
+		return "", fmt.Errorf("crawl: GET %s: status %d: %w", rawURL, status, errUnavailable)
 	}
 	if status != http.StatusOK {
 		return "", fmt.Errorf("crawl: GET %s: status %d", rawURL, status)
