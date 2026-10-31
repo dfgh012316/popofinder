@@ -84,6 +84,13 @@ func parseSmileProfile(page string) (id, name string, education []string, err er
 	return id, name, education, nil
 }
 
+// smileProfileError names a failed profile by its position on the branch's
+// doctor list and drops the slug, which spells the doctor's name, from err (the
+// fetcher's errors carry the URL): crawl logs carry site IDs only (OD-10).
+func smileProfileError(branch string, i int, slug string, err error) error {
+	return fmt.Errorf("crawl: smile branch %s doctor #%d: %s", branch, i+1, strings.ReplaceAll(err.Error(), slug, "<slug>"))
+}
+
 // Crawl crawls the branches in order. Any failed page fails the whole crawl,
 // and so does a branch listing no doctor (see Cgmh.crawlCampus).
 func (s *Smile) Crawl(ctx context.Context) ([]Doctor, error) {
@@ -98,7 +105,7 @@ func (s *Smile) Crawl(ctx context.Context) ([]Doctor, error) {
 		if len(slugs) == 0 {
 			return nil, fmt.Errorf("crawl: smile branch %s lists no doctors", b.slug)
 		}
-		for _, slug := range slugs {
+		for i, slug := range slugs {
 			if taken[slug] {
 				continue
 			}
@@ -106,11 +113,11 @@ func (s *Smile) Crawl(ctx context.Context) ([]Doctor, error) {
 			u := s.base + "/doctors/" + slug
 			profile, err := s.fetcher.Get(ctx, u)
 			if err != nil {
-				return nil, fmt.Errorf("crawl: smile doctor %s: %w", slug, err)
+				return nil, smileProfileError(b.slug, i, slug, err)
 			}
 			id, name, education, err := parseSmileProfile(profile)
 			if err != nil {
-				return nil, fmt.Errorf("crawl: smile doctor %s: %w", slug, err)
+				return nil, smileProfileError(b.slug, i, slug, err)
 			}
 			doctors = append(doctors, Doctor{
 				Key:         "smile:" + id,

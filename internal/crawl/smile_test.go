@@ -96,6 +96,8 @@ func TestSmileCrawlFailsOnMissingPage(t *testing.T) {
 	srv := smileFixtureServer(t, map[string]string{"doctor_dr-chen-da-wen.html": "missing.html"})
 
 	got, err := newTestSmile(srv).Crawl(context.Background())
-	require.Error(t, err)
 	require.Nil(t, got)
+	// The slug spells the doctor's name: the error names the list position instead.
+	require.ErrorContains(t, err, "branch jinshansmile doctor #2")
+	require.NotContains(t, err.Error(), "chen-da-wen")
 }
