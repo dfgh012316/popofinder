@@ -37,8 +37,8 @@ func TestHelpFlexMessageUsageText(t *testing.T) {
 	s := string(raw)
 
 	for _, want := range []string{
-		"關鍵字（姓名、醫院或科別）",
-		"例如：陳、三總、牙科",
+		"關鍵字（姓名、醫院或科別），多個條件用空白分開",
+		"例如：陳、三總、牙科、高醫 骨科",
 		"城市 關鍵字",
 		"例如：台北 牙科",
 		"[城市]@醫院 醫院名稱",

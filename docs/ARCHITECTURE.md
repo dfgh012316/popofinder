@@ -2,6 +2,13 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-01 — 查詢：多個詞、醫院別名、「同院同科醫師」按鈕
+- `search.ParseCriteria` 以空白切詞：開頭縣市（第一個詞是醫院別名時不拆）→ `@醫院`／`@科別`／單獨的 `@` → `TypeAll` 時任一詞是縣市（可帶「市」「縣」）就當縣市、以別名開頭的詞拆開（`splitHospitalAlias`）。`Criteria.SearchTerm` 是以單一空白串接的詞，`Criteria.Terms()` 回傳各詞（沒有詞時回一個空字串，符合全部）；`session` 與 `search_log` 的格式不變。規則與理由見 OD-14。
+- 新 `internal/linebot/search/alias.go`：`hospitalAliasGroups`（`names` 是使用者會打的寫法，`also` 是只拿來比對的寫法）、`HospitalPatterns(term)`（別名組，或不在別名表時加上／去掉「紀念」「綜合」、「X牙醫診所」→「X牙醫」）。
+- `Repository.Search`：每個詞一組條件、以 AND 串接，醫院欄比對 `HospitalPatterns` 的每個寫法（OR）。上面 2026-10-12 幾條提到的常數 `matchRankExpr` 改為 `Search` 內依詞組出的運算式（任一詞符合姓名 0、醫院 1、其餘 2），參數依序編號、只放用到的。
+- 醫師卡片 footer 加 message action「同院同科醫師」（`sameDepartmentSearchText`：縣市＋醫院＋第一個科別，科別依「、」「/」「／」與空白切開）；仍不放 postback（`TestDoctorBubbleHasNoTakedownButton`）。LINE 的 300 字上限改為共用的 `template.MaxMessageTextRunes`，取代 handler 的 `maxQuickReplyTextRunes`。
+- 測試：`TestHospitalAliasGroupsAreWellFormed`、`TestHospitalPatterns`、`TestParseCriteria` 新案例、`TestDoctorBubbleSameDepartmentButton`（按鈕文字經 `ParseCriteria` 的結果），整合測試 `TestSearchWordsAliasesAndHospitalVariants`（別名、紀念寫法、分組計數、按鈕送出的文字）。
+
 ### 2026-11-01 — 官網爬蟲：高醫（`kmuh`）、小港（`kmsh`）、蒔美牙醫（`smile`）
 - 新 `Source`，都已註冊進 `cmd/crawl`：
   - `Kmuh`（中和、岡山，`kmuh:<doctorID>`）：`DocIntro/Intro` 的群組 → `Ajax/VirtualDept?groupCode=…&Controller=DocIntro&Action=ShowDocList`（GET）→ `DocIntro/ShowDocList?virtualCode=…&JsonLoc=…` → `DocIntro/DocDetail?doctorID=…&virtualCode=…&dCode=…`。

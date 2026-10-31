@@ -150,6 +150,57 @@ func TestSearchMatchesBothTaiSpellings(t *testing.T) {
 	}
 }
 
+// Every word must match; a word matches hospitals through its alias group and the
+// 紀念/綜合 variants (OD-14). Rows are fictional apart from hospital names.
+func TestSearchWordsAliasesAndHospitalVariants(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{
+		{"台北", "三軍總醫院", "牙科", "王小明"},
+		{"台北", "內湖三總", "牙科", "陳大文"},
+		{"台北", "三總", "內科", "李小華"},
+		{"新北", "亞東紀念醫院", "牙科", "張小美"},
+		{"新北", "亞東醫院", "內科", "林志明"},
+		{"台北", "甲牙科診所", "家醫科", "王大同"},
+		{"高雄", "高雄醫學大學附設中和紀念醫院", "骨科", "林一"},
+		{"高雄", "高醫岡山醫院", "骨科", "林二"},
+	})
+
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"三總", []string{"李小華", "王小明", "陳大文"}},
+		{"三總 牙科", []string{"王小明", "陳大文"}},
+		{"牙科 三總", []string{"王小明", "陳大文"}},
+		{"新北 三總", []string{}},
+		{"@醫院 三軍總醫院", []string{"李小華", "王小明", "陳大文"}},
+		// 王大同's hospital matches 牙科 (rank 1), the others only by department (rank 2).
+		{"台北 牙科", []string{"王大同", "王小明", "陳大文"}},
+		{"王 牙科", []string{"王大同", "王小明"}},
+		{"亞東醫院", []string{"林志明", "張小美"}},
+		{"亞東紀念醫院", []string{"林志明", "張小美"}},
+		{"高醫", []string{"林一", "林二"}},
+		{"高醫 岡山醫院", []string{"林二"}},
+		// What the 同院同科醫師 buttons send: the full name finds only that hospital,
+		// and a blog spelling finds the whole alias group.
+		{"高雄 高雄醫學大學附設中和紀念醫院 骨科", []string{"林一"}},
+		{"台北 內湖三總 牙科", []string{"王小明", "陳大文"}},
+	}
+	for _, tt := range tests {
+		got, _, err := r.Search(search.ParseCriteria(tt.input), 0)
+		require.NoError(t, err)
+		require.Equal(t, tt.want, names(got), "input %s", tt.input)
+	}
+
+	// A row is ranked by the first field any word matches: 王 matches the names.
+	_, stats, err := r.Search(search.ParseCriteria("王 牙科"), 0)
+	require.NoError(t, err)
+	require.Equal(t, MatchCounts{Name: 2}, stats.MatchCounts)
+	_, stats, err = r.Search(search.ParseCriteria("三總 牙科"), 0)
+	require.NoError(t, err)
+	require.Equal(t, MatchCounts{Hospital: 2}, stats.MatchCounts)
+}
+
 func TestDirectoryHospitals(t *testing.T) {
 	r := openIntegrationDB(t)
 	r.db.MustExec(`INSERT INTO medical_personnel (city, hospital, department, name, source) VALUES
