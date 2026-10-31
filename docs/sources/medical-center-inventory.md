@@ -31,7 +31,7 @@
 | 新竹台大分院 | `hch.gov.tw/?aid=51&pid=<科別>&page_name=detail&iid=<id>`,伺服器渲染;欄位標籤是「學&emsp;歷」 | 規模小;學歷是自由文字 |
 | 台北慈濟 | WordPress;每科分類 RSS `/?cat=<id>&feed=rss2` 一次 10 筆全文;學歷獨立欄位(18/20 醫學學位) | 各科列表網址不統一,要先收集分類 ID;個人頁 slug 是姓名,穩定鍵是 `?p=<id>`;約 250–350 位,含中醫師、牙醫師 |
 | 萬芳 | Nuxt 伺服器渲染,`departments/team/<16 位 hex>`,`__NUXT_DATA__` 有結構化的 education | 每頁約 1.1 MB;科別總覽不是一般連結 |
-| 高醫 | 個人頁 `kmuh.org.tw/Web/WebRegistration/DocIntro/DocDetail?lang=tw&doctorID=<id>&VirtualCode=<科別>` 結構乾淨 | 醫師清單要靠 AJAX `Ajax/VirtualDept` |
+| 高醫 | 個人頁 `kmuh.org.tw/Web/WebRegistration/DocIntro/DocDetail?lang=tw&doctorID=<id>&VirtualCode=<科別>` 結構乾淨。**2026-11-01 已收錄**(中和、岡山、小港,見 OD-10 補註) | 醫師清單要靠 AJAX `Ajax/VirtualDept`(GET 也可以);岡山同一套系統;小港同一套系統但清單全空,醫師在舊站 |
 | 高雄榮總 | 約 20 個科部子站 `org.vghks.gov.tw/<科部>/News_DoctorList.aspx?n=&sms=`(有 `page`/`PageSize`、「共 N 筆」)→ 個人頁有學歷欄 | 網址參數都是不透明 hash、沒有穩定的醫師 ID;頁尾「未經允許請勿任意轉載、複製或做商業用途」 |
 | 成大 | 14 個以上 RPage 子網域,`<科部>.hosp.ncku.edu.tw/p/405-<site>-<article>,c<cat>.php`,學歷獨立欄位 | 每個子站設定不同,要從醫療團隊頁往下走兩層 |
 | 中山附醫 | `csh.org.tw/DoctorIntro/DoctorIntro.aspx?EmpCode=<id>` 伺服器渲染,學歷獨立欄位 | 科別列表要送表單;另一個 WordPress 站 `web.csh.org.tw/web/doctor/` 的個人頁未驗證 |

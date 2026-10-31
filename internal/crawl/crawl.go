@@ -4,7 +4,10 @@ package crawl
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"html"
+	"log/slog"
 	"regexp"
 	"strings"
 )
@@ -30,11 +33,25 @@ type Source interface {
 var (
 	tagRe      = regexp.MustCompile(`<[^>]*>`)
 	listItemRe = regexp.MustCompile(`(?s)<li>(.*?)</li>`)
+	// lineBreakRe splits free-text fields into lines.
+	lineBreakRe = regexp.MustCompile(`(?i)<br\s*/?>|</p>|</li>|</div>`)
 )
 
 // htmlText strips tags, unescapes entities and trims the result.
 func htmlText(raw string) string {
 	return strings.TrimSpace(html.UnescapeString(tagRe.ReplaceAllString(raw, "")))
+}
+
+// htmlLines splits a free-text HTML field at line breaks (see lineBreakRe) into
+// its trimmed, non-empty lines.
+func htmlLines(raw string) []string {
+	var lines []string
+	for _, line := range strings.Split(htmlText(lineBreakRe.ReplaceAllString(raw, "\n")), "\n") {
+		if s := strings.TrimSpace(line); s != "" {
+			lines = append(lines, s)
+		}
+	}
+	return lines
 }
 
 // doctorIndex collects doctor IDs from department pages: each ID once, in the
@@ -57,4 +74,42 @@ func (x *doctorIndex) add(id, deptCode, deptName string) {
 		x.order = append(x.order, id)
 	}
 	x.depts[id] = append(x.depts[id], deptName)
+}
+
+// Some sites list doctors whose profile page is broken or unpublished: 長庚
+// returns 500 for 6.5% of them on every attempt, 高醫 redirects some to its home
+// page. A source that skips such profiles (profileUnavailable) counts them in a
+// profileSkips: once minProfilesForSkipCheck profiles have been requested, more
+// than maxSkipPercent of them skipped means the site itself is broken, and the
+// crawl fails then instead of spending the retries on every remaining profile.
+const (
+	maxSkipPercent          = 15
+	minProfilesForSkipCheck = 100
+)
+
+// profileUnavailable reports whether a profile fetch failed in a way a skipping
+// source tolerates: every retry failed (errUnavailable) or the page redirected.
+func profileUnavailable(err error) bool {
+	return errors.Is(err, errUnavailable) || errors.Is(err, errRedirected)
+}
+
+type profileSkips struct {
+	requested, skipped int
+}
+
+// add counts one profile request and returns an error once too many are skipped.
+func (p *profileSkips) add(skipped bool) error {
+	p.requested++
+	if skipped {
+		p.skipped++
+	}
+	if p.requested >= minProfilesForSkipCheck && p.skipped*100 > p.requested*maxSkipPercent {
+		return fmt.Errorf("%d of %d profiles unavailable", p.skipped, p.requested)
+	}
+	return nil
+}
+
+// log records the counts only, never which doctors were skipped.
+func (p *profileSkips) log(source string) {
+	slog.Info("skipped unavailable profiles", "source", source, "skipped", p.skipped, "requested", p.requested)
 }

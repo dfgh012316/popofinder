@@ -2,6 +2,15 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-01 — 官網爬蟲：高醫（`kmuh`）、小港（`kmsh`）、蒔美牙醫（`smile`）
+- 新 `Source`，都已註冊進 `cmd/crawl`：
+  - `Kmuh`（中和、岡山，`kmuh:<doctorID>`）：`DocIntro/Intro` 的群組 → `Ajax/VirtualDept?groupCode=…&Controller=DocIntro&Action=ShowDocList`（GET）→ `DocIntro/ShowDocList?virtualCode=…&JsonLoc=…` → `DocIntro/DocDetail?doctorID=…&virtualCode=…&dCode=…`。
+  - `Kmsh`（小港舊站，`kmsh:<pno>`）：`doc.asp` → `doc_index.asp?dept_code=…` → `search_data2.asp?pno=…`。
+  - `Smile`（`smile:<WordPress post ID>`，取自 `shortlink`；slug 是姓名，不能當鍵）：`/all-doctors/<分院>` → `/doctors/<slug>`，學歷從第一個 section 的簡歷挑學校片段（`smileSchoolRe`／`smilePostRe`）。
+- 跳過不可用的個人頁抽成共用：`profileUnavailable`（`errUnavailable`，或新的 `errRedirected`：`Fetcher.Get` 對 3xx 包這個 sentinel，仍不跟隨轉址）＋`profileSkips`（`maxSkipPercent` 15、`minProfilesForSkipCheck` 100；`log` 只記數字），由 `Cgmh` 與 `Kmuh` 使用。取代上一條的 `cgmhMaxSkipPercent`／`cgmhMinProfilesForSkipCheck` 與「只有 `Cgmh` 跳過」。`Kmsh`、`Smile` 照舊任一頁失敗就失敗。
+- 共用 helper `htmlLines`（依 `lineBreakRe` 切行、trim、去掉空行）：原本的 `mmhBreakRe` 改名搬到 `crawl.go`，`Mmh` 也改用它。
+- live test：`TestKmuhLive`（最多 7 個請求）、`TestKmshLive`（6）、`TestSmileLive`（5）。
+
 ### 2026-11-01 — 官網爬蟲：長庚（`cgmh`）
 - 新 `Source` `Cgmh`（`cgmh:<DoctorInfo id>`）：`www.cgmh.org.tw` 一站 10 個院區，`DeptList/<院區碼>` → `DeptInfo/<路徑>`（`<h4>` 科別連結，以及群組標題下的 `<h5>` 子科別連結）→ `DoctorInfo/<id>`，已註冊進 `cmd/crawl`。多院區一人一筆、某院區 0 位就失敗，沿用 `Cgh` 的做法（`cgmhProgress.taken` 跨院區傳遞）。院區順序與長庚診所不收見 OD-10 補註。
 - `Fetcher.Get`：重試完仍是網路錯誤或 5xx 時，回傳的 error 包 `errUnavailable`（重試規則不變）。只有 `Cgmh` 跳過這種個人頁：請求滿 `cgmhMinProfilesForSkipCheck`（100）頁後，跳過比例超過 `cgmhMaxSkipPercent`（15%）就回 error，每頁都檢查；結束時用 `slog` 記跳過數量（只有數字）。其他來源仍是任一頁失敗就失敗。

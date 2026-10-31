@@ -19,7 +19,6 @@ var (
 	mmhNameRe      = regexp.MustCompile(`(?s)<h2 class="event-hed-title">(.*?)</h2>`)
 	mmhRoleRe      = regexp.MustCompile(`^\s*[(（][^)）]*[)）]`)
 	mmhEducationRe = regexp.MustCompile(`(?s)<h2 class="event-ch-title">主要學歷</h2>\s*<ul class="info-list">(.*?)</ul>\s*<h2 class="event-ch-title">`)
-	mmhBreakRe     = regexp.MustCompile(`(?i)<br\s*/?>|</p>|</li>|</div>`)
 )
 
 // Mmh crawls 馬偕紀念醫院 (www.mmh.org.tw): the 台北 doctor list → profile pages.
@@ -91,11 +90,7 @@ func parseMmhProfile(page string) (name string, education []string, err error) {
 		return "", nil, fmt.Errorf("crawl: mmh profile without name")
 	}
 	if m := mmhEducationRe.FindStringSubmatch(page); m != nil {
-		for _, line := range strings.Split(htmlText(mmhBreakRe.ReplaceAllString(m[1], "\n")), "\n") {
-			if s := strings.TrimSpace(line); s != "" {
-				education = append(education, s)
-			}
-		}
+		education = htmlLines(m[1])
 	}
 	return name, education, nil
 }
