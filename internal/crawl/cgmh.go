@@ -2,9 +2,7 @@ package crawl
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
 	"regexp"
 	"strings"
 )
@@ -15,17 +13,6 @@ var (
 	cgmhDoctorIDRe  = regexp.MustCompile(`href="/tw/Services/DoctorInfo/([A-Za-z0-9]+)"`)
 	cgmhNameRe      = regexp.MustCompile(`(?s)<h3 class="fz-32">(.*?)</h3>`)
 	cgmhEducationRe = regexp.MustCompile(`(?s)<div class="fz-24 fwb">\s*學歷\s*</div>\s*<ul[^>]*>(.*?)</ul>`)
-)
-
-// 長庚 has profiles that return 500 on every attempt (6.5% of them in 2026-11,
-// mostly doctors listed as 職位「醫師」) and rare 30-second timeouts, so a profile
-// still unavailable after the retries (errUnavailable) is skipped. Once
-// cgmhMinProfilesForSkipCheck profiles have been requested, more than
-// cgmhMaxSkipPercent of them skipped means the site itself is broken: the crawl
-// fails then instead of spending 40 seconds of retries on every remaining profile.
-const (
-	cgmhMaxSkipPercent          = 15
-	cgmhMinProfilesForSkipCheck = 100
 )
 
 type cgmhCampus struct {
@@ -115,12 +102,13 @@ func parseCgmhProfile(page string) (name string, education []string, err error) 
 }
 
 type cgmhProgress struct {
-	taken              map[string]bool // profiles already requested under an earlier campus
-	requested, skipped int
+	taken map[string]bool // profiles already requested under an earlier campus
+	skips profileSkips
 }
 
 // Crawl crawls the campuses in order. Any failed page fails the whole crawl,
-// except unavailable profiles (see cgmhMaxSkipPercent).
+// except unavailable profiles (mostly 500s, mostly doctors listed as 職位「醫師」;
+// see profileSkips).
 func (s *Cgmh) Crawl(ctx context.Context) ([]Doctor, error) {
 	p := &cgmhProgress{taken: map[string]bool{}}
 	var doctors []Doctor
@@ -131,7 +119,7 @@ func (s *Cgmh) Crawl(ctx context.Context) ([]Doctor, error) {
 		}
 		doctors = append(doctors, ds...)
 	}
-	slog.Info("cgmh skipped unavailable profiles", "skipped", p.skipped, "requested", p.requested)
+	p.skips.log(s.Name())
 	return doctors, nil
 }
 
@@ -171,18 +159,16 @@ func (s *Cgmh) crawlCampus(ctx context.Context, c cgmhCampus, p *cgmhProgress) (
 	doctors := make([]Doctor, 0, len(x.order))
 	for _, id := range x.order {
 		p.taken[id] = true
-		p.requested++
 		u := s.profileURL(id)
 		page, err := s.fetcher.Get(ctx, u)
-		if errors.Is(err, errUnavailable) {
-			p.skipped++
-		} else if err != nil {
+		skipped := profileUnavailable(err)
+		if err != nil && !skipped {
 			return nil, fmt.Errorf("crawl: cgmh doctor %s: %w", id, err)
 		}
-		if p.requested >= cgmhMinProfilesForSkipCheck && p.skipped*100 > p.requested*cgmhMaxSkipPercent {
-			return nil, fmt.Errorf("crawl: cgmh: %d of %d profiles unavailable", p.skipped, p.requested)
+		if err := p.skips.add(skipped); err != nil {
+			return nil, fmt.Errorf("crawl: cgmh: %w", err)
 		}
-		if err != nil {
+		if skipped {
 			continue
 		}
 		name, education, err := parseCgmhProfile(page)

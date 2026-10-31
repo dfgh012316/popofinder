@@ -180,6 +180,7 @@ func TestFetcherDoesNotFollowRedirects(t *testing.T) {
 
 	_, err := NewFetcher(0).Get(context.Background(), srv.URL+"/old")
 	require.ErrorContains(t, err, "status 302")
+	require.ErrorIs(t, err, errRedirected)
 	require.False(t, hitPrivate)
 }
 

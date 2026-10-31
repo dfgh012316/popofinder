@@ -14,17 +14,20 @@ import (
 )
 
 func main() {
-	sources := flag.String("sources", "", "要爬的來源,逗號分隔(目前支援:femh,shh,mmh,cgh,cgmh)")
+	sources := flag.String("sources", "", "要爬的來源,逗號分隔(目前支援:femh,shh,mmh,cgh,cgmh,kmuh,kmsh,smile)")
 	dryRun := flag.Bool("dry-run", false, "只印出計畫,不寫入資料庫")
 	flag.Parse()
 
 	fetcher := crawl.NewFetcher(time.Second)
 	registry := map[string]crawl.Source{
-		"femh": crawl.NewFemh("https://www.femh.org.tw", fetcher),
-		"shh":  crawl.NewShh("https://shh.tmu.edu.tw", fetcher),
-		"mmh":  crawl.NewMmh("https://www.mmh.org.tw", fetcher),
-		"cgh":  crawl.NewCgh("https://www.cgh.org.tw", "https://sijhih.cgh.org.tw", "https://hsinchu.cgh.org.tw", "https://neihu.cgh.org.tw", fetcher),
-		"cgmh": crawl.NewCgmh("https://www.cgmh.org.tw", fetcher),
+		"femh":  crawl.NewFemh("https://www.femh.org.tw", fetcher),
+		"shh":   crawl.NewShh("https://shh.tmu.edu.tw", fetcher),
+		"mmh":   crawl.NewMmh("https://www.mmh.org.tw", fetcher),
+		"cgh":   crawl.NewCgh("https://www.cgh.org.tw", "https://sijhih.cgh.org.tw", "https://hsinchu.cgh.org.tw", "https://neihu.cgh.org.tw", fetcher),
+		"cgmh":  crawl.NewCgmh("https://www.cgmh.org.tw", fetcher),
+		"kmuh":  crawl.NewKmuh("https://www.kmuh.org.tw", "https://www.kmugh.org.tw", fetcher),
+		"kmsh":  crawl.NewKmsh("https://www.kmsh.org.tw/Web/wwwKMHK/dept/8300/2024KMSH/pro", fetcher),
+		"smile": crawl.NewSmile("https://www.smile-dental.tw", fetcher),
 	}
 
 	// Validate before connecting so a typo never touches the database.
