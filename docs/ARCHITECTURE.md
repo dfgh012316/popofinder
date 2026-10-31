@@ -2,6 +2,12 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-01 — 官網爬蟲：長庚（`cgmh`）
+- 新 `Source` `Cgmh`（`cgmh:<DoctorInfo id>`）：`www.cgmh.org.tw` 一站 10 個院區，`DeptList/<院區碼>` → `DeptInfo/<路徑>`（`<h4>` 科別連結，以及群組標題下的 `<h5>` 子科別連結）→ `DoctorInfo/<id>`，已註冊進 `cmd/crawl`。多院區一人一筆、某院區 0 位就失敗，沿用 `Cgh` 的做法（`cgmhProgress.taken` 跨院區傳遞）。院區順序與長庚診所不收見 OD-10 補註。
+- `Fetcher.Get`：重試完仍是網路錯誤或 5xx 時，回傳的 error 包 `errUnavailable`（重試規則不變）。只有 `Cgmh` 跳過這種個人頁：請求滿 `cgmhMinProfilesForSkipCheck`（100）頁後，跳過比例超過 `cgmhMaxSkipPercent`（15%）就回 error，每頁都檢查；結束時用 `slog` 記跳過數量（只有數字）。其他來源仍是任一頁失敗就失敗。
+- 學歷規則（所有來源）：`medicalDegreeTerms` 加中醫系／牙醫系／牙科系／後醫系／中西醫雙主修，只寫校名時多認「醫藥大學」「醫藥學院」，`englishRe` 加 Medical University／College、University of Medical Science(s)，`hasMedicalDegree` 先依「、」拆開再逐一判斷（OD-10 2026-11-01 補註）。
+- `TestCgmhLive` 最多 6 個請求（部分個人頁沒有學歷欄，最多看 3 位醫師）。
+
 ### 2026-10-12 — 臺／台查詢互通、`scripts/cleanup/` 一次性資料清理
 - 「臺」當「台」：`ParseCriteria` 先把輸入的「臺」換成「台」；`Search` 比對時用常數 `nameMatchCol`／`hospitalMatchCol`／`departmentMatchCol`（`translate(<欄位>, '臺', '台')`），`matchRankExpr` 也用同一組。資料不改。`TestSearchMatchesBothTaiSpellings` 涵蓋三個欄位與縣市前綴。
 - 新目錄 `scripts/cleanup/`：一次性資料清理腳本，只寫規則、不含具名內容；不放進 `migrations/`（不會在部署時自動執行），由維護者以 `psql -1 -v ON_ERROR_STOP=1 -f` 執行，每步各設 `popo.change_reason`。第一支 `scripts/cleanup/2026-10-12-blog-cleanup.sql`（OD-13），`TestBlogCleanupScript` 用虛構資料驗證規則與重跑不再變動。

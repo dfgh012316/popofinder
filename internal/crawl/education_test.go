@@ -21,8 +21,22 @@ func TestIsMedicalDegreeLine(t *testing.T) {
 		{"長庚大學醫學學士", true},
 		{"波蘭盧布林醫學大學", true},
 		{"國立陽明大學醫學院", true},
+		{"長庚大學中醫系畢業", true},
+		{"中國醫藥大學牙醫系", true},
+		{"法國笛卡兒大學(巴黎第五大學)牙科系", true},
+		{"長庚大學學士後醫系", true},
+		{"義守大學學士後中醫系", true},
+		{"長庚大學中西醫雙主修學士", true},
+		{"中國醫藥大學", true},
+		{"中國醫藥學院", true},
 		{"Doctor of Medicine, University of the Philippines", true},
 		{"M.D., Universidad Central del Este", true},
+		{"Poznan University of Medical Sciences", true},
+		{"Medical University of Lublin畢業", true},
+		{"1975-1982 Medical College, National Taiwan University", true},
+		{"長庚大學", false},
+		{"中國醫藥大學藥學系", false},
+		{"高雄醫學大學牙醫學研究所碩士", false},
 		{"輔仁大學公共衛生學系碩士", false},
 		{"台北醫學大學醫學研究所博士", false},
 		{"高雄醫學大學藥學系", false},
@@ -39,6 +53,8 @@ func TestIsMedicalDegreeLine(t *testing.T) {
 func TestHasMedicalDegree(t *testing.T) {
 	require.True(t, hasMedicalDegree([]string{"輔仁大學公共衛生學系碩士", "國立台灣大學醫學系"}))
 	require.False(t, hasMedicalDegree([]string{"輔仁大學公共衛生學系碩士"}))
+	require.True(t, hasMedicalDegree([]string{"成大醫學院後醫系、比利時魯汶大學碩士"}), "each 、-separated degree is checked alone")
+	require.False(t, hasMedicalDegree([]string{"臺灣大學藥學系、臨床藥學研究所碩士"}))
 	require.False(t, hasMedicalDegree(nil))
 }
 
