@@ -27,9 +27,11 @@ on:
 # so of two runs started close together the one that finishes last wins: on 2026-11-01
 # the run for #53 finished after the one for #54 and put production back on 1bfa607,
 # without #54. A newer pending run replaces an older pending one, which is fine: its
-# merge commit includes the older one.
+# merge commit includes the older one. Closing a PR without merging also starts a run
+# (it builds nothing); it gets a group of its own so it never replaces a pending
+# deployment run.
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.event_name == 'pull_request' && !github.event.pull_request.merged && format('unmerged-{0}', github.run_id) || github.workflow }}
   cancel-in-progress: false
 
 jobs:

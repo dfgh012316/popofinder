@@ -6,7 +6,7 @@
 - `.github/workflows/ci.yaml` 的 `pull_request` 加 `paths`：`cmd/`、`internal/`、`migrations/`、`go.mod`、`go.sum`、`dockerfile`、`.dockerignore`、`makefile`、`ci.yaml` 本身，排除 `*_test.go` 與 `testdata/`。只改文件、README、`assets/`、`scripts/` 或測試的 PR merge 後不 build、不部署；`workflow_dispatch` 照舊可以手動跑。
 - 因此 production 的 image tag 是最後一個觸發 CI 的 merge commit，不一定是 develop 的 HEAD。
 - 代價：只改測試或 `assets/richmenu/` 的 PR，CI 不會跑 `go test`（本來就只在 merge 後跑），要在本機跑過。
-- 加 `concurrency`（group 為 workflow 名稱，不取消進行中的 run）：CI run 排隊依序跑。每個 run build 並部署自己的 merge commit，兩個 run 重疊時最後跑完的會蓋掉前一個；2026-11-01 #53 的 run 比 #54 晚結束，把 production 蓋回不含 #54 的 `1bfa607`。
+- 加 `concurrency`（group 為 workflow 名稱，不取消進行中的 run）：CI run 排隊依序跑。每個 run build 並部署自己的 merge commit，兩個 run 重疊時最後跑完的會蓋掉前一個；2026-11-01 #53 的 run 比 #54 晚結束，把 production 蓋回不含 #54 的 `1bfa607`。關閉但沒 merge 的 PR 也會產生 run（不 build），用自己的 group（`unmerged-<run_id>`），不會取代排隊中的部署 run。
 
 ### 2026-11-01 — 圖文選單放 repo；「回報」回覆補充與更正的寄信方式
 - 新 `assets/richmenu/`：`richmenu.json`（選單定義）、`richmenu.html`（產圖原始檔，檔頭有產圖指令）、`richmenu.png`。`scripts/richmenu/apply.sh` 用 Messaging API 驗證 → 建立 → 上傳圖片 → 設為預設 → 刪除其他 API 選單，token 讀 `LINE_MESSAGE_CHANNEL_TOKEN`、經 stdin 給 curl。規則與理由見 OD-16。
