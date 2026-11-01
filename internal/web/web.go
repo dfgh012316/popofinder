@@ -73,17 +73,26 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/search", h.search)
 		r.Get("/hospitals", h.hospitals)
 		r.Get("/report", h.report)
-		r.Get("/robots.txt", robots)
+		r.Get("/robots.txt", staticFile("robots.txt", "text/plain; charset=utf-8"))
+		r.Get("/sitemap.xml", staticFile("sitemap.xml", "application/xml; charset=utf-8"))
+		r.Get("/llms.txt", serveBytes(llmsTxt, "text/plain; charset=utf-8"))
+		r.Get("/og.png", staticFile("og.png", "image/png"))
+		r.Get("/favicon.svg", staticFile("favicon.svg", "image/svg+xml"))
 	})
 }
 
 // page is what every page passes to the layout.
 type page struct {
-	Title   string
-	Query   string // the search box value
-	NoIndex bool
-	LineURL string
-	Content any
+	Title       string // "" on the home page
+	Description string // "" means siteDescription
+	Canonical   string // full URL of a page that may be indexed; "" for search results
+	Query       string // the search box value
+	NoIndex     bool
+	JSONLD      template.JS
+	Content     any
+
+	// Set by render.
+	HeadTitle, OGImage, LineURL string
 }
 
 // example is a search shown on the home page, the same kinds as the help card's.
@@ -98,11 +107,13 @@ var examples = []example{
 }
 
 func (h *Handler) home(w http.ResponseWriter, r *http.Request) {
-	render(w, http.StatusOK, "home", page{Content: struct {
-		Coverage string
-		Examples []example
-		LineURL  string
-	}{linetemplate.CoverageText, examples, lineAddURL}})
+	render(w, http.StatusOK, "home", page{Canonical: siteURL + "/", JSONLD: homeJSONLD, Content: struct {
+		Coverage    string
+		Examples    []example
+		LineURL     string
+		Differences []point
+		FAQs        any
+	}{linetemplate.CoverageText, examples, lineAddURL, differences, faqs}})
 }
 
 type resultCard struct {
@@ -203,27 +214,30 @@ func (h *Handler) hospitals(w http.ResponseWriter, r *http.Request) {
 	for i, x := range hs {
 		links[i] = hospitalLink{Label: x.Hospital + " " + strconv.Itoa(x.Count) + " 位", Query: linetemplate.HospitalSearchText(x)}
 	}
-	render(w, http.StatusOK, "hospitals", page{Title: "醫院清單", Content: struct {
-		Links []hospitalLink
-		Note  string
-	}{links, linetemplate.HospitalListNote}})
+	render(w, http.StatusOK, "hospitals", page{Title: "醫院清單", Canonical: siteURL + "/hospitals",
+		Description: "收錄了官網醫師名單的醫院與人數，點醫院名稱即可查詢該院醫師的學歷。", Content: struct {
+			Links []hospitalLink
+			Note  string
+		}{links, linetemplate.HospitalListNote}})
 }
 
 func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
-	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Content: struct {
-		Text, Email string
-	}{linetemplate.ReportText, linetemplate.ContactEmail}})
-}
-
-// robots keeps search results out of search engines (OD-17); the other pages have
-// no doctor data and may be indexed.
-func robots(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte("User-agent: *\nDisallow: /search\n"))
+	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Canonical: siteURL + "/report",
+		Description: "醫師或院所補充學歷、更正資料或要求下架的方式。", Content: struct {
+			Text, Email string
+		}{linetemplate.ReportText, linetemplate.ContactEmail}})
 }
 
 func render(w http.ResponseWriter, status int, name string, p page) {
 	p.LineURL = lineAddURL
+	p.OGImage = siteURL + "/og.png"
+	if p.Description == "" {
+		p.Description = siteDescription
+	}
+	p.HeadTitle = "POPO Finder 醫師學歷查詢｜查醫師在哪裡受醫學教育"
+	if p.Title != "" {
+		p.HeadTitle = p.Title + " - POPO Finder 醫師學歷查詢"
+	}
 	var buf bytes.Buffer
 	if err := pages[name].ExecuteTemplate(&buf, "layout", p); err != nil {
 		slog.Error("web render", "page", name, "err", err)
@@ -240,7 +254,7 @@ func render(w http.ResponseWriter, status int, name string, p page) {
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)

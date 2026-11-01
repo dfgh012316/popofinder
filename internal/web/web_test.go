@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"html"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -207,7 +209,124 @@ func TestReportShowsContact(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "核對完就刪除")
 }
 
-func TestRobotsDisallowsSearch(t *testing.T) {
+// Every group must disallow /search: a crawler obeys only the group that names it
+// most specifically, never also the * group (RFC 9309), so an AI group without it
+// would open the search results (OD-17).
+func TestRobotsEveryGroupDisallowsSearch(t *testing.T) {
 	rec := serve(t, New(&fakeStore{}), "/robots.txt")
-	require.Equal(t, "User-agent: *\nDisallow: /search\n", rec.Body.String())
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
+	body := rec.Body.String()
+
+	var agents []string
+	groups := 0
+	for _, block := range strings.Split(body, "\n\n") {
+		var lines []string
+		for _, l := range strings.Split(block, "\n") {
+			if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+				lines = append(lines, l)
+			}
+		}
+		if len(lines) == 0 || !strings.HasPrefix(lines[0], "User-agent:") {
+			continue
+		}
+		groups++
+		for _, l := range lines {
+			if a, ok := strings.CutPrefix(l, "User-agent: "); ok {
+				agents = append(agents, a)
+			}
+		}
+		require.Contains(t, lines, "Disallow: /search", "group %v", lines)
+		for _, l := range lines {
+			require.False(t, strings.HasPrefix(l, "Allow:"), "group %v must not allow anything back", lines)
+		}
+	}
+	require.Equal(t, 2, groups)
+	for _, a := range []string{"*", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot", "Google-Extended", "CCBot"} {
+		require.Contains(t, agents, a)
+	}
+	require.Contains(t, body, "Sitemap: "+siteURL+"/sitemap.xml")
+}
+
+func TestHomeSEO(t *testing.T) {
+	body := serve(t, New(&fakeStore{}), "/").Body.String()
+	require.Contains(t, body, `<link rel="canonical" href="`+siteURL+`/">`)
+	require.Contains(t, body, `<meta property="og:image" content="`+siteURL+`/og.png">`)
+	require.Contains(t, body, `<meta name="description" content="`+siteDescription+`">`)
+	require.Contains(t, body, `<link rel="icon" href="/favicon.svg"`)
+	for _, d := range differences {
+		require.Contains(t, body, d.Title)
+	}
+
+	// The JSON-LD is valid and says what the page shows.
+	_, rest, ok := strings.Cut(body, `<script type="application/ld+json">`)
+	require.True(t, ok)
+	raw, _, ok := strings.Cut(rest, "</script>")
+	require.True(t, ok)
+	var ld []struct {
+		Type        string   `json:"@type"`
+		FeatureList []string `json:"featureList"`
+		MainEntity  []struct {
+			Name   string `json:"name"`
+			Answer struct {
+				Text string `json:"text"`
+			} `json:"acceptedAnswer"`
+		} `json:"mainEntity"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(raw), &ld))
+	require.Len(t, ld, 2)
+	require.Equal(t, "WebApplication", ld[0].Type)
+	require.Len(t, ld[0].FeatureList, len(differences))
+	require.Equal(t, "FAQPage", ld[1].Type)
+	require.Len(t, ld[1].MainEntity, len(faqs))
+	for i, f := range faqs {
+		require.Equal(t, f.Q, ld[1].MainEntity[i].Name)
+		require.Equal(t, f.A, ld[1].MainEntity[i].Answer.Text)
+		require.Contains(t, body, f.Q, "the FAQ is visible on the page too")
+	}
+}
+
+func TestSearchHasNoCanonicalOrJSONLD(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	body := serve(t, New(f), "/search?q=陳").Body.String()
+	require.NotContains(t, body, `rel="canonical"`)
+	require.NotContains(t, body, "application/ld+json")
+}
+
+func TestLLMsTxt(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/llms.txt")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "text/plain; charset=utf-8", rec.Header().Get("Content-Type"))
+	body := rec.Body.String()
+	require.True(t, strings.HasPrefix(body, "# POPO Finder"))
+	for _, d := range differences {
+		require.Contains(t, body, "**"+d.Title+"**：")
+	}
+	for _, f := range faqs {
+		require.Contains(t, body, "### "+f.Q)
+	}
+	require.Contains(t, body, linetemplate.ContactEmail)
+	require.NotContains(t, body, "<no value>")
+}
+
+func TestSitemapListsOnlyIndexablePages(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/sitemap.xml")
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	for _, p := range []string{"/", "/hospitals", "/report"} {
+		require.Contains(t, body, "<loc>"+siteURL+p+"</loc>")
+	}
+	require.NotContains(t, body, "<loc>"+siteURL+"/search")
+}
+
+func TestStaticAssets(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/og.png")
+	require.Equal(t, "image/png", rec.Header().Get("Content-Type"))
+	img, err := png.DecodeConfig(rec.Body)
+	require.NoError(t, err)
+	require.Equal(t, [2]int{1200, 630}, [2]int{img.Width, img.Height}, "Open Graph size")
+
+	rec = serve(t, New(&fakeStore{}), "/favicon.svg")
+	require.Equal(t, "image/svg+xml", rec.Header().Get("Content-Type"))
+	require.Contains(t, rec.Body.String(), "<svg")
 }
