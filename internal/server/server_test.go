@@ -73,3 +73,24 @@ func TestHandleVersion(t *testing.T) {
 		t.Fatalf("unexpected version body: %v", body)
 	}
 }
+
+// HEAD answers like GET on GET routes (the web pages, /health); POST-only routes stay 405.
+func TestHeadUsesGetRoutes(t *testing.T) {
+	srv := httptest.NewServer(New("secret", "test", nil, nil, nil))
+	defer srv.Close()
+	for path, want := range map[string]int{
+		"/":                     http.StatusOK,
+		"/report":               http.StatusOK,
+		"/health":               http.StatusOK,
+		"/api/linebot/callback": http.StatusMethodNotAllowed,
+	} {
+		resp, err := http.Head(srv.URL + path)
+		if err != nil {
+			t.Fatalf("HEAD %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Errorf("HEAD %s: got %d, want %d", path, resp.StatusCode, want)
+		}
+	}
+}

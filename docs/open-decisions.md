@@ -304,7 +304,7 @@
   - `popo.jerrytech.me` 提供網頁版:首頁(查詢說明)、`/search`(查詢結果與分頁)、`/hospitals`(醫院清單)、`/report`(補充、更正與下架)。和 LINE 共用查詢解析、`Repository.Search`、卡片欄位與各段文字(`template.NewCard`、`SearchSummary`、`CoverageText`、`HospitalListNote`、`ReportText`),兩邊顯示一樣的內容;不另外做對外 API。
   - 搜尋引擎:首頁、醫院清單、說明頁可以收錄;`/search` 用 robots.txt 擋,回應也帶 `X-Robots-Tag: noindex, nofollow` 與 meta robots;不做每位醫師的固定網址頁。
   - 不讓整份資料被輕易複製:每個 IP 每分鐘最多 30 次、每天最多 100 次查詢頁面(翻頁也算;依 Cloudflare 的 `CF-Connecting-IP`),一次查詢最多翻到第 20 頁(200 筆,超過就提示加條件縮小範圍),沒有列出全部醫師的頁面。查詢方式和 LINE 一樣,不限定只能查姓名。
-  - `search_log` 加 `channel`(`line`/`web`),網頁版只記第一頁(同 LINE,翻頁不記)。仍不存使用者(OD-5);網頁版的程式不記 IP,也不把查詢內容寫進 log。
+  - `search_log` 加 `channel`(`line`/`web`),網頁版只記第一頁(同 LINE,翻頁不記;HEAD 請求也不記)。仍不存使用者(OD-5);網頁版的程式不記 IP,也不把查詢內容寫進 log。
   - 頁面不放 script、不載入外部資源(CSP `default-src 'none'`),並送 `Referrer-Policy: no-referrer`:從卡片點到醫院網站時,對方看不到查了什麼。
   - **贊助連結先不放**:上線後用 `search_log` 的 `web` 筆數看實際使用量,再專門討論。
   - **SEO 與 AI 搜尋**(沿用 Slipkit 的做法):可收錄的頁面有 canonical、Open Graph/Twitter 分享卡(`og.png`)、各自的 description;首頁有 JSON-LD(`WebApplication`、`FAQPage`)與看得到的「和其他醫師名單有什麼不同」「常見問題」;另有 `/llms.txt`、`/sitemap.xml`(只列可收錄的頁面,不寫 lastmod)、favicon。`robots.txt` 明列主要 AI 檢索器,但**每一組都 `Disallow: /search`**:檢索器只套用最符合自己名字的那一組(RFC 9309),不會再看 `*` 那一組,照抄 Slipkit 的「AI 檢索器 `Allow: /`」會讓查詢結果被收錄與訓練(`TestRobotsEveryGroupDisallowsSearch`)。
