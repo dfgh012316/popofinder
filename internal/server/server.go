@@ -56,6 +56,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) routes() {
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.RequestID)
+	// HEAD gets the GET route's headers (link checkers and uptime monitors send HEAD);
+	// it has to be on the root router, before routing.
+	s.router.Use(middleware.GetHead)
 
 	s.router.Get("/health", s.handleHealth)
 	s.router.Get("/readyz", s.handleReady)

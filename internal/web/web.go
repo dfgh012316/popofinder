@@ -181,8 +181,9 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/search?q="+url.QueryEscape(q), http.StatusSeeOther)
 		return
 	}
-	if pageNo == 1 {
+	if pageNo == 1 && r.Method == http.MethodGet {
 		// Only the first page is a new search, as in LINE where paging is a postback.
+		// A HEAD (a link checker before its GET) is not a search.
 		if err := h.store.LogSearch(r.Context(), criteria, stats.TotalCount, database.ChannelWeb); err != nil {
 			slog.Error("log search", "err", err)
 		}

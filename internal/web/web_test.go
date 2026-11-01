@@ -184,6 +184,16 @@ func TestSearchIsRateLimitedPerIP(t *testing.T) {
 	require.Len(t, f.offsets, searchesPerMinute+1)
 }
 
+// The server answers HEAD with the GET route (middleware.GetHead); a HEAD before a
+// GET must not be logged as a second search.
+func TestHeadSearchIsNotLogged(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	rec := httptest.NewRecorder()
+	New(f).search(rec, httptest.NewRequest(http.MethodHead, "/search?q=陳", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Empty(t, f.logs)
+}
+
 func TestSearchIsLimitedPerDay(t *testing.T) {
 	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
 	h := New(f)
