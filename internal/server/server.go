@@ -15,6 +15,7 @@ import (
 	"github.com/dfgh012316/popofinder/internal/linebot/client"
 	"github.com/dfgh012316/popofinder/internal/linebot/handler"
 	"github.com/dfgh012316/popofinder/internal/linebot/webhook"
+	"github.com/dfgh012316/popofinder/internal/web"
 )
 
 type Server struct {
@@ -65,6 +66,9 @@ func (s *Server) routes() {
 			r.Post("/callback", s.handleCallback)
 		})
 	})
+
+	// Web version (docs/open-decisions.md OD-17).
+	web.New(s.repo).Register(s.router)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -1,18 +1,19 @@
 # POPO Finder
 
-查詢台灣醫師學歷的 LINE bot。收錄醫療院所官網、網路公開彙整與民眾回報的醫師學歷，台灣與國外畢業的都有；卡片照實顯示學歷與資料來源，不做任何判斷。
+查詢台灣醫師學歷的 LINE bot 與網頁版。收錄醫療院所官網、網路公開彙整與民眾回報的醫師學歷，台灣與國外畢業的都有；卡片照實顯示學歷與資料來源，不做任何判斷。
 
 POPO Finder 的定位是「醫師學歷字典」：查一位醫師在哪裡受醫學教育，判斷留給你自己。它不是評價平台，也不會標示誰是不是「波波」。
 
-## 加入好友
+## 開始使用
+
+- 網頁版：https://popo.jerrytech.me
+- LINE：[點擊我加入好友](https://lin.ee/h1GxF9s)，或掃描 QR code
 
 ![QRcode](./assets/join-qrcode.png)
 
-[點擊我加入好友](https://lin.ee/h1GxF9s)
-
 ## 怎麼查
 
-直接輸入關鍵字（姓名、醫院或科別），多個條件用空白分開，每個條件都要符合：
+網頁版和 LINE 的查詢方式相同。直接輸入關鍵字（姓名、醫院或科別），多個條件用空白分開，每個條件都要符合：
 
 | 輸入 | 找什麼 |
 |---|---|
@@ -57,7 +58,7 @@ POPO Finder 的定位是「醫師學歷字典」：查一位醫師在哪裡受�
 
 Go 單體服務（chi router），資料庫是 Postgres（sqlx + pgx），部署在樹莓派的 k3s 上。
 
-- `cmd/server`：LINE bot，監聽 `:8000`；端點有 `POST /api/linebot/callback`（LINE webhook）、`GET /health`、`GET /readyz`、`GET /version`。
+- `cmd/server`：LINE bot 與網頁版，監聽 `:8000`；端點有 `POST /api/linebot/callback`（LINE webhook）、`GET /health`、`GET /readyz`、`GET /version`，以及網頁版的 `/`、`/search`、`/hospitals`、`/report`（`internal/web`）。網頁版的查詢結果不給搜尋引擎收錄，並限制每個 IP 的查詢頻率。
 - `cmd/crawl`：醫院官網爬蟲。
 - `cmd/reconcile`：重新比對部落格資料、回填來源。
 - `migrations/`：資料表結構，部署時由 init container 套用。

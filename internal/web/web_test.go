@@ -1,0 +1,213 @@
+package web
+
+import (
+	"context"
+	"database/sql"
+	"html"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dfgh012316/popofinder/internal/database"
+	"github.com/dfgh012316/popofinder/internal/linebot/search"
+	linetemplate "github.com/dfgh012316/popofinder/internal/linebot/template"
+)
+
+type logged struct {
+	criteria search.Criteria
+	count    int
+	channel  string
+}
+
+type fakeStore struct {
+	personnel []database.MedicalPersonnel
+	stats     database.SearchStats
+	offsets   []int
+	logs      []logged
+	hospitals []database.DirectoryHospital
+}
+
+func (f *fakeStore) Search(c search.Criteria, offset int) ([]database.MedicalPersonnel, database.SearchStats, error) {
+	f.offsets = append(f.offsets, offset)
+	return f.personnel, f.stats, nil
+}
+
+func (f *fakeStore) LogSearch(_ context.Context, c search.Criteria, n int, channel string) error {
+	f.logs = append(f.logs, logged{c, n, channel})
+	return nil
+}
+
+func (f *fakeStore) DirectoryHospitals(context.Context) ([]database.DirectoryHospital, error) {
+	return f.hospitals, nil
+}
+
+func serve(t *testing.T, h *Handler, target string, header ...string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := chi.NewRouter()
+	h.Register(r)
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	for i := 0; i+1 < len(header); i += 2 {
+		req.Header.Set(header[i], header[i+1])
+	}
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	return rec
+}
+
+type searchLink struct{ Q, Page, Text string }
+
+var searchHref = regexp.MustCompile(`href="/search\?([^"]*)">([^<]*)<`)
+
+// searchLinks decodes the /search links in body, whatever escaping the template chose.
+func searchLinks(t *testing.T, body string) []searchLink {
+	t.Helper()
+	var links []searchLink
+	for _, m := range searchHref.FindAllStringSubmatch(body, -1) {
+		v, err := url.ParseQuery(html.UnescapeString(m[1]))
+		require.NoError(t, err)
+		links = append(links, searchLink{Q: v.Get("q"), Page: v.Get("page"), Text: m[2]})
+	}
+	return links
+}
+
+func doctor() database.MedicalPersonnel {
+	return database.MedicalPersonnel{
+		Name: "王<b>大明</b>", City: "桃園", Hospital: "林口長庚紀念醫院",
+		Department:      sql.NullString{String: "心臟內科", Valid: true},
+		Education:       sql.NullString{String: "某大學醫學系", Valid: true},
+		Source:          sql.NullString{String: "hospital_directory", Valid: true},
+		SourceURL:       sql.NullString{String: "https://hospital.example/doc/1", Valid: true},
+		SourceCheckedAt: sql.NullTime{Time: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC), Valid: true},
+	}
+}
+
+func TestHomeIsIndexable(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/")
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	require.Contains(t, body, `action="/search"`)
+	require.Contains(t, body, linetemplate.CoverageText)
+	require.Contains(t, searchLinks(t, body), searchLink{Q: "台北@醫院 三總", Text: "台北@醫院 三總"})
+	require.NotContains(t, body, "noindex")
+	require.Empty(t, rec.Header().Get("X-Robots-Tag"))
+	require.Equal(t, "no-referrer", rec.Header().Get("Referrer-Policy"))
+	require.Contains(t, rec.Header().Get("Content-Security-Policy"), "default-src 'none'")
+}
+
+func TestSearchRendersCardsAndLogsFirstPage(t *testing.T) {
+	f := &fakeStore{personnel: []database.MedicalPersonnel{doctor()}, stats: database.SearchStats{TotalCount: 15, CurrentPage: 1, TotalPages: 2, HasMore: true, MatchCounts: database.MatchCounts{Hospital: 15}}}
+	rec := serve(t, New(f), "/search?q="+url.QueryEscape("林長 心臟"))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	// Same parsing, summary and card as LINE.
+	criteria := search.ParseCriteria("林長 心臟")
+	require.Equal(t, []int{0}, f.offsets)
+	require.Equal(t, []logged{{criteria, 15, database.ChannelWeb}}, f.logs)
+	body := rec.Body.String()
+	require.Contains(t, body, linetemplate.SearchSummary(criteria, f.stats))
+	require.Contains(t, body, "王&lt;b&gt;大明&lt;/b&gt;", "names are escaped")
+	require.Contains(t, body, "點此查看來源（2026-10-31 查到）")
+	require.Contains(t, body, `href="https://hospital.example/doc/1" target="_blank" rel="noopener noreferrer nofollow"`)
+	links := searchLinks(t, body)
+	require.Contains(t, links, searchLink{Q: linetemplate.NewCard(doctor()).SameDepartmentText, Text: "同院同科醫師"})
+	require.Contains(t, links, searchLink{Q: "林長 心臟", Page: "2", Text: "下一頁 ›"})
+
+	// Results stay out of search engines (OD-17).
+	require.Equal(t, "noindex, nofollow", rec.Header().Get("X-Robots-Tag"))
+	require.Contains(t, body, `<meta name="robots" content="noindex, nofollow">`)
+}
+
+func TestSearchLaterPagesAreNotLogged(t *testing.T) {
+	f := &fakeStore{personnel: []database.MedicalPersonnel{doctor()}, stats: database.SearchStats{TotalCount: 25, CurrentPage: 2, TotalPages: 3, HasMore: true}}
+	rec := serve(t, New(f), "/search?q=陳&page=2")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, []int{database.PageSize}, f.offsets)
+	require.Empty(t, f.logs)
+	require.Contains(t, searchLinks(t, rec.Body.String()), searchLink{Q: "陳", Page: "1", Text: "‹ 上一頁"})
+}
+
+func TestSearchPagingIsCapped(t *testing.T) {
+	f := &fakeStore{personnel: []database.MedicalPersonnel{doctor()}, stats: database.SearchStats{TotalCount: 5000, CurrentPage: maxPages, TotalPages: 500, HasMore: true}}
+	rec := serve(t, New(f), "/search?q=醫&page=999")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, []int{(maxPages - 1) * database.PageSize}, f.offsets)
+	body := rec.Body.String()
+	require.NotContains(t, body, "下一頁")
+	require.Contains(t, body, "只顯示前 200 筆")
+}
+
+func TestSearchPastLastPageRedirects(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{TotalCount: 3, CurrentPage: 5, TotalPages: 1}}
+	rec := serve(t, New(f), "/search?q=陳&page=5")
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+	require.Equal(t, "/search?q="+url.QueryEscape("陳"), rec.Header().Get("Location"))
+}
+
+func TestSearchNoResults(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	rec := serve(t, New(f), "/search?q=不存在")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), linetemplate.NoResultsText)
+	require.Len(t, f.logs, 1)
+}
+
+func TestSearchEmptyQueryRedirectsHome(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/search?q=+")
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+	require.Equal(t, "/", rec.Header().Get("Location"))
+}
+
+func TestSearchTooLong(t *testing.T) {
+	f := &fakeStore{}
+	rec := serve(t, New(f), "/search?q="+strings.Repeat("陳", linetemplate.MaxMessageTextRunes+1))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Empty(t, f.offsets)
+}
+
+func TestSearchIsRateLimitedPerIP(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	h := New(f)
+	for i := 0; i < searchesPerMinute; i++ {
+		require.Equal(t, http.StatusOK, serve(t, h, "/search?q=陳", "CF-Connecting-IP", "203.0.113.7").Code)
+	}
+	require.Equal(t, http.StatusTooManyRequests, serve(t, h, "/search?q=陳", "CF-Connecting-IP", "203.0.113.7").Code)
+	require.Equal(t, http.StatusOK, serve(t, h, "/search?q=陳", "CF-Connecting-IP", "203.0.113.8").Code, "another IP is not affected")
+	require.Len(t, f.offsets, searchesPerMinute+1)
+}
+
+func TestLimiterWindowResets(t *testing.T) {
+	l := newLimiter(2, time.Minute)
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	require.True(t, l.allow("a", now))
+	require.True(t, l.allow("a", now))
+	require.False(t, l.allow("a", now.Add(59*time.Second)))
+	require.True(t, l.allow("a", now.Add(time.Minute)))
+}
+
+func TestHospitalsLinksSearch(t *testing.T) {
+	f := &fakeStore{hospitals: []database.DirectoryHospital{{City: "台北", Hospital: "馬偕紀念醫院", Count: 443}}}
+	rec := serve(t, New(f), "/hospitals")
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	require.Contains(t, searchLinks(t, body), searchLink{Q: linetemplate.HospitalSearchText(f.hospitals[0]), Text: "馬偕紀念醫院 443 位"})
+	require.Contains(t, body, linetemplate.HospitalListNote)
+}
+
+func TestReportShowsContact(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/report")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `href="mailto:`+linetemplate.ContactEmail+`"`)
+	require.Contains(t, rec.Body.String(), "核對完就刪除")
+}
+
+func TestRobotsDisallowsSearch(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/robots.txt")
+	require.Equal(t, "User-agent: *\nDisallow: /search\n", rec.Body.String())
+}

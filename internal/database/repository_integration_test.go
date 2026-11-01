@@ -256,22 +256,23 @@ func TestLogSearchInsertsRow(t *testing.T) {
 	ctx := context.Background()
 	taipei := "台北"
 
-	require.NoError(t, r.LogSearch(ctx, search.Criteria{SearchType: search.TypeAll, SearchTerm: "林", City: &taipei}, 4))
-	require.NoError(t, r.LogSearch(ctx, search.Criteria{SearchType: search.TypeHospital, SearchTerm: "三總"}, 0))
+	require.NoError(t, r.LogSearch(ctx, search.Criteria{SearchType: search.TypeAll, SearchTerm: "林", City: &taipei}, 4, ChannelLINE))
+	require.NoError(t, r.LogSearch(ctx, search.Criteria{SearchType: search.TypeHospital, SearchTerm: "三總"}, 0, ChannelWeb))
 
 	type logRow struct {
 		SearchType  string         `db:"search_type"`
 		City        sql.NullString `db:"city"`
 		SearchTerm  string         `db:"search_term"`
 		ResultCount int            `db:"result_count"`
+		Channel     string         `db:"channel"`
 		HasTS       bool           `db:"has_ts"`
 	}
 	var got []logRow
 	require.NoError(t, r.db.Select(&got,
-		"SELECT search_type, city, search_term, result_count, created_at IS NOT NULL AS has_ts FROM search_log ORDER BY id"))
+		"SELECT search_type, city, search_term, result_count, channel, created_at IS NOT NULL AS has_ts FROM search_log ORDER BY id"))
 	require.Equal(t, []logRow{
-		{SearchType: "all", City: sql.NullString{String: "台北", Valid: true}, SearchTerm: "林", ResultCount: 4, HasTS: true},
-		{SearchType: "hospital", City: sql.NullString{}, SearchTerm: "三總", ResultCount: 0, HasTS: true},
+		{SearchType: "all", City: sql.NullString{String: "台北", Valid: true}, SearchTerm: "林", ResultCount: 4, Channel: "line", HasTS: true},
+		{SearchType: "hospital", City: sql.NullString{}, SearchTerm: "三總", ResultCount: 0, Channel: "web", HasTS: true},
 	}, got)
 }
 
@@ -281,7 +282,8 @@ func TestSearchLogHasNoUserColumn(t *testing.T) {
 	var cols []string
 	require.NoError(t, r.db.Select(&cols,
 		"SELECT column_name FROM information_schema.columns WHERE table_name = 'search_log' ORDER BY ordinal_position"))
-	require.Equal(t, []string{"id", "created_at", "search_type", "city", "search_term", "result_count"}, cols)
+	// channel says LINE or web (OD-17), not who searched.
+	require.Equal(t, []string{"id", "created_at", "search_type", "city", "search_term", "result_count", "channel"}, cols)
 }
 
 func TestSearchLogRejectsUnknownType(t *testing.T) {
@@ -289,6 +291,8 @@ func TestSearchLogRejectsUnknownType(t *testing.T) {
 
 	_, err := r.db.Exec("INSERT INTO search_log (search_type, search_term, result_count) VALUES ('name', 'x', 0)")
 	require.Error(t, err)
+	_, err = r.db.Exec("INSERT INTO search_log (search_type, search_term, result_count, channel) VALUES ('all', 'x', 0, 'app')")
+	require.Error(t, err, "channel is line or web")
 }
 
 func TestSearchReturnsSourceCheckedAt(t *testing.T) {

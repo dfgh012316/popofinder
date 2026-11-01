@@ -1,0 +1,63 @@
+{{define "layout"}}<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{if .NoIndex}}<meta name="robots" content="noindex, nofollow">
+{{end}}<title>{{with .Title}}{{.}} - {{end}}POPO Finder 醫師學歷查詢</title>
+<meta name="description" content="查詢台灣醫師在哪裡受醫學教育。收錄醫療院所官網與網路公開彙整的醫師學歷，台灣與國外畢業的都有，照實顯示學歷與資料來源。">
+<style>
+:root{--bg:#f5f7fa;--fg:#222;--muted:#666;--card:#fff;--card-hd:#f0f8ff;--line:#e3e6ea;--accent:#1DB446;--link:#0b62c4}
+@media (prefers-color-scheme:dark){:root{--bg:#15181c;--fg:#e8e8e8;--muted:#a0a6ad;--card:#1f2328;--card-hd:#1b2a3a;--line:#30363d;--accent:#2fca5a;--link:#6cb0ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.65}
+a{color:var(--link)}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header{background:var(--card);border-bottom:4px solid var(--accent)}
+header .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding-top:12px;padding-bottom:12px}
+.brand{font-weight:700;font-size:20px;color:var(--fg);text-decoration:none;white-space:nowrap}
+form.search{display:flex;flex:1;min-width:240px;gap:8px}
+form.search input{flex:1;min-width:0;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}
+form.search button{font-size:16px;padding:10px 18px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+main{padding:20px 0 36px}
+h1{font-size:26px;line-height:1.35;margin:4px 0 12px}
+h2{font-size:19px;margin:28px 0 8px}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:14px;padding:18px 0 32px}
+footer nav{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:6px}
+.muted{color:var(--muted)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.summary{white-space:pre-line;margin-bottom:16px}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.card h2{margin:0;padding:12px 18px;background:var(--card-hd);font-size:20px}
+.card dl{margin:0;padding:12px 18px;display:grid;grid-template-columns:5.5em 1fr;gap:6px 12px}
+.card dt{color:var(--muted)}
+.card dd{margin:0;overflow-wrap:anywhere}
+.card .more{border-top:1px solid var(--line);padding:10px 18px;font-weight:700}
+.pager{display:flex;justify-content:space-between;margin-top:18px;font-weight:700}
+.empty{text-align:center;font-weight:700;color:var(--muted);padding:28px 16px}
+.pre{white-space:pre-line}
+ul.examples{padding-left:0;list-style:none}
+ul.examples li{margin:6px 0}
+ul.examples a{font-weight:700;text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:2px 10px;background:var(--card);margin-right:6px}
+ul.links{padding-left:18px}
+ul.links li{margin:6px 0}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<a class="brand" href="/">POPO Finder</a>
+<form class="search" action="/search" method="get" role="search">
+<input name="q" value="{{.Query}}" placeholder="姓名、醫院或科別，例如：三總 牙科" aria-label="查詢醫師" maxlength="300" required>
+<button type="submit">查詢</button>
+</form>
+</div></header>
+<main><div class="wrap">
+{{template "content" .Content}}
+</div></main>
+<footer><div class="wrap">
+<nav><a href="/">查詢說明</a><a href="/hospitals">醫院清單</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a></nav>
+<div>只呈現公開的學歷事實，不評價任何醫師。</div>
+</div></footer>
+</body>
+</html>{{end}}

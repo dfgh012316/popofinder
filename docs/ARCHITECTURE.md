@@ -2,6 +2,13 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-01 — 網頁版（`internal/web`）
+- `internal/web`：chi 路由 `/`、`/search`、`/hospitals`、`/report`、`/robots.txt`，由 `server.routes` 註冊；`html/template`，`templates/*.html` 以 `go:embed` 打包，每頁是 layout 加該頁的 content。`store` interface（`Search`、`LogSearch`、`DirectoryHospitals`）讓測試不需要 DB。規則與理由見 OD-17。
+- 與 LINE 共用：`template.NewCard`（卡片欄位與標籤；LINE bubble 改由它產生，輸出的 JSON 不變）、`template.SearchSummary`（原 handler 的 `formatSummary` 與 `coverageNote` 搬過來）、`CoverageText`、`HospitalListNote`、`HospitalSearchText`、`ReportText`、`NoResultsText`、`SameDepartmentLabel`、`SourceLinkLabel`。每頁 10 筆改為 `database.PageSize`，repository、摘要、LINE 翻頁都用它。
+- `limit.go`：每個 IP 每分鐘 30 次（固定視窗，追蹤超過 1 萬個 IP 時清掉過期的），頁數上限 20。`/search` 回 `X-Robots-Tag: noindex, nofollow`；所有網頁回 CSP（`default-src 'none'`）、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff`。
+- migration 0008：`search_log.channel`（`line`／`web`，預設 `line`）；`Repository.LogSearch` 多一個 channel 參數（`database.ChannelLINE`／`ChannelWeb`）。
+- 測試：`internal/web/web_test.go`（假 store：卡片與摘要同 LINE、只記第一頁、頁數上限、頻率限制、noindex、跳脫）；整合測試 `TestLogSearchInsertsRow`、`TestSearchLogHasNoUserColumn`、`TestSearchLogRejectsUnknownType` 更新。
+
 ### 2026-11-01 — CI 只在會改變 image 的改動時跑
 - `.github/workflows/ci.yaml` 的 `pull_request` 加 `paths`：`cmd/`、`internal/`、`migrations/`、`go.mod`、`go.sum`、`dockerfile`、`.dockerignore`、`makefile`、`ci.yaml` 本身，排除 `*_test.go` 與 `testdata/`。只改文件、README、`assets/`、`scripts/` 或測試的 PR merge 後不 build、不部署；`workflow_dispatch` 照舊可以手動跑。
 - 因此 production 的 image tag 是最後一個觸發 CI 的 merge commit，不一定是 develop 的 HEAD。

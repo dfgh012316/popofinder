@@ -1,0 +1,15 @@
+{{define "content"}}
+<h1>查醫師在哪裡受醫學教育</h1>
+<p>{{.Coverage}}</p>
+<h2>怎麼查</h2>
+<p>在上方輸入姓名、醫院或科別，多個條件用空白分開，每個條件都要符合。</p>
+<ul class="examples">
+{{range .Examples}}<li><a href="/search?q={{.Query}}">{{.Query}}</a><span class="muted">{{.Note}}</span></li>
+{{end}}</ul>
+<p>常見的醫院簡稱也查得到，例如三總、北榮、台大、高醫、林長、彰基、部桃。醫師卡片上的「同院同科醫師」會查同一家醫院、同科別的其他醫師。</p>
+<p><a href="/hospitals">醫院清單</a>列出收錄了官網醫師名單的醫院，這些醫院查得比較完整。</p>
+<h2>補充、更正與下架</h2>
+<p>醫師或院所想補充學歷、更正或下架資料，請看<a href="/report">說明</a>。院所官網有寫醫師學歷的，任何人都可以提供網址。</p>
+<h2>也可以用 LINE 查</h2>
+<p><a href="{{.LineURL}}" rel="noopener">加入 POPO Finder 的 LINE 官方帳號</a>，查詢方式相同。</p>
+{{end}}
