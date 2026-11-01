@@ -43,7 +43,7 @@ var helpContents = map[string]any{
 						"size":   "lg",
 						"margin": "lg",
 					},
-					// Keyword search format
+					// Keyword search format; words separated by spaces must all match (OD-14)
 					map[string]any{
 						"type":    "box",
 						"layout":  "vertical",
@@ -54,7 +54,7 @@ var helpContents = map[string]any{
 								"layout": "baseline",
 								"contents": []any{
 									map[string]any{"type": "text", "text": "🔍", "size": "sm", "color": "#666666", "flex": 1},
-									map[string]any{"type": "text", "text": "關鍵字（姓名、醫院或科別）", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+									map[string]any{"type": "text", "text": "關鍵字（姓名、醫院或科別），多個條件用空白分開", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
 								},
 							},
 							map[string]any{
@@ -62,7 +62,7 @@ var helpContents = map[string]any{
 								"layout": "baseline",
 								"contents": []any{
 									map[string]any{"type": "text", "text": "💡", "size": "sm", "color": "#666666", "flex": 1},
-									map[string]any{"type": "text", "text": "例如：陳、三總、牙科", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
+									map[string]any{"type": "text", "text": "例如：陳、三總、牙科、高醫 骨科", "size": "sm", "color": "#666666", "flex": 5, "wrap": true},
 								},
 							},
 						},

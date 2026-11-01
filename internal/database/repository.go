@@ -20,10 +20,6 @@ const (
 	departmentMatchCol = "translate(department, '臺', '台')"
 )
 
-// matchRankExpr ranks a row for TypeAll ordering: 0 = name match, 1 = hospital match,
-// 2 = department-only match. It references $1, which Search always binds to the term.
-const matchRankExpr = "CASE WHEN " + nameMatchCol + " ILIKE $1 THEN 0 WHEN " + hospitalMatchCol + " ILIKE $1 THEN 1 ELSE 2 END"
-
 // tieBreakOrder orders rows within a search (and within each TypeAll match group).
 // Not id: blog rows were loaded first, so id order put the blog list ahead of every
 // hospital-directory row (docs/open-decisions.md OD-12).
@@ -79,30 +75,46 @@ func (r *Repository) Ping(ctx context.Context) error {
 }
 
 // Search queries medical_personnel with ILIKE filtering, deterministic ordering, and offset-based pagination.
+// Every term must match (docs/open-decisions.md OD-14): in TypeAll the name, the hospital
+// or the department, otherwise the searched column. A term matches a hospital whose
+// name contains any of search.HospitalPatterns(term). TypeAll rows are ranked 0 when a
+// term matches the name, 1 when one matches the hospital, else 2 (department only).
 func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPersonnel, SearchStats, error) {
-	var (
-		whereClauses []string
-		args         []any
-		argIdx       = 1
-	)
-
-	term := "%" + criteria.SearchTerm + "%"
-
-	switch criteria.SearchType {
-	case search.TypeAll:
-		whereClauses = append(whereClauses, fmt.Sprintf("(%[2]s ILIKE $%[1]d OR %[3]s ILIKE $%[1]d OR %[4]s ILIKE $%[1]d)", argIdx, nameMatchCol, hospitalMatchCol, departmentMatchCol))
-	case search.TypeHospital:
-		whereClauses = append(whereClauses, fmt.Sprintf("%s ILIKE $%d", hospitalMatchCol, argIdx))
-	case search.TypeDepartment:
-		whereClauses = append(whereClauses, fmt.Sprintf("%s ILIKE $%d", departmentMatchCol, argIdx))
+	var args []any
+	ilike := func(col, s string) string {
+		args = append(args, "%"+s+"%")
+		return fmt.Sprintf("%s ILIKE $%d", col, len(args))
 	}
-	args = append(args, term)
-	argIdx++
+	hospitalMatch := func(term string) string {
+		var ors []string
+		for _, p := range search.HospitalPatterns(term) {
+			ors = append(ors, ilike(hospitalMatchCol, p))
+		}
+		return "(" + strings.Join(ors, " OR ") + ")"
+	}
+
+	var whereClauses, nameMatches, hospitalMatches []string
+	for _, t := range criteria.Terms() {
+		switch criteria.SearchType {
+		case search.TypeAll:
+			name, hospital := ilike(nameMatchCol, t), hospitalMatch(t)
+			nameMatches = append(nameMatches, name)
+			hospitalMatches = append(hospitalMatches, hospital)
+			whereClauses = append(whereClauses, "("+name+" OR "+hospital+" OR "+ilike(departmentMatchCol, t)+")")
+		case search.TypeHospital:
+			whereClauses = append(whereClauses, hospitalMatch(t))
+		case search.TypeDepartment:
+			whereClauses = append(whereClauses, ilike(departmentMatchCol, t))
+		}
+	}
+	matchRankExpr := "0"
+	if criteria.SearchType == search.TypeAll {
+		matchRankExpr = "CASE WHEN " + strings.Join(nameMatches, " OR ") + " THEN 0 WHEN " + strings.Join(hospitalMatches, " OR ") + " THEN 1 ELSE 2 END"
+	}
 
 	if criteria.City != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("city = $%d", argIdx))
 		args = append(args, *criteria.City)
-		argIdx++
+		whereClauses = append(whereClauses, fmt.Sprintf("city = $%d", len(args)))
 	}
 
 	where := ""
@@ -137,7 +149,7 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 	}
 	dataSQL := fmt.Sprintf(
 		"SELECT "+selectColumns+" FROM medical_personnel %s ORDER BY %s LIMIT 10 OFFSET $%d",
-		where, orderBy, argIdx,
+		where, orderBy, len(args)+1,
 	)
 	args = append(args, offset)
 

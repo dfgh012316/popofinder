@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/dfgh012316/popofinder/internal/database"
+	"github.com/dfgh012316/popofinder/internal/linebot/search"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDoctorBubbleShowsSourceAndURL(t *testing.T) {
@@ -163,5 +165,58 @@ func TestDoctorBubbleHasNoTakedownButton(t *testing.T) {
 	// 下架改用寄信申請(OD-9),醫師卡片不得出現下架按鈕或任何 postback。
 	if strings.Contains(s, "下架") || strings.Contains(s, `"type":"postback"`) {
 		t.Fatalf("doctor card must not offer a takedown button or postback: %s", s)
+	}
+}
+
+// The 「同院同科醫師」 button (OD-14) sends a keyword search for the doctor's city,
+// hospital and first department; cards without a department have no button.
+func TestDoctorBubbleSameDepartmentButton(t *testing.T) {
+	dept := func(s string) sql.NullString { return sql.NullString{String: s, Valid: true} }
+	tests := []struct {
+		name       string
+		p          database.MedicalPersonnel
+		wantText   string
+		wantCity   string
+		wantSearch string
+	}{
+		{"first of several departments", database.MedicalPersonnel{City: "桃園", Hospital: "林口長庚紀念醫院", Department: dept("心臟內科、心臟衰竭中心")},
+			"桃園 林口長庚紀念醫院 心臟內科", "桃園", "林口長庚紀念醫院 心臟內科"},
+		{"slash in the department, space in the hospital", database.MedicalPersonnel{City: "台北", Hospital: "甲診所 乙診所", Department: dept("醫美/內科")},
+			"台北 甲診所 乙診所 醫美", "台北", "甲診所 乙診所 醫美"},
+		{"no department", database.MedicalPersonnel{City: "台北", Hospital: "甲診所"}, "", "", ""},
+		{"blank department", database.MedicalPersonnel{City: "台北", Hospital: "甲診所", Department: dept(" ")}, "", "", ""},
+		{"over LINE's limit", database.MedicalPersonnel{City: "台北", Hospital: strings.Repeat("甲", 300), Department: dept("內科")}, "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.p.Name = "王小明"
+			raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{tt.p})
+			require.NoError(t, err)
+			var msg struct {
+				Contents struct {
+					Contents []struct {
+						Footer *struct {
+							Contents []struct {
+								Action map[string]string `json:"action"`
+							} `json:"contents"`
+						} `json:"footer"`
+					} `json:"contents"`
+				} `json:"contents"`
+			}
+			require.NoError(t, json.Unmarshal(raw, &msg))
+			footer := msg.Contents.Contents[0].Footer
+			if tt.wantText == "" {
+				require.Nil(t, footer)
+				return
+			}
+			require.NotNil(t, footer)
+			action := footer.Contents[0].Action
+			require.Equal(t, map[string]string{"type": "message", "label": "同院同科醫師", "text": tt.wantText}, action)
+
+			got := search.ParseCriteria(action["text"])
+			require.Equal(t, search.TypeAll, got.SearchType)
+			require.Equal(t, tt.wantCity, *got.City)
+			require.Equal(t, tt.wantSearch, got.SearchTerm)
+		})
 	}
 }

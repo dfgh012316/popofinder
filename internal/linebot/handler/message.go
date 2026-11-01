@@ -19,9 +19,6 @@ import (
 // helpCommand is the text that shows the help card; quick replies send it too.
 const helpCommand = "幫助"
 
-// maxQuickReplyTextRunes is LINE's limit for a message action's text.
-const maxQuickReplyTextRunes = 300
-
 // MessageHandler handles text MessageEvent.
 type MessageHandler struct {
 	store *session.Store
@@ -185,7 +182,7 @@ func zeroResultActions(criteria search.Criteria) []template.QuickReplyAction {
 	var actions []template.QuickReplyAction
 	n := utf8.RuneCountInString(criteria.SearchTerm)
 	narrowed := criteria.City != nil || criteria.SearchType != search.TypeAll
-	if narrowed && n > 0 && n <= maxQuickReplyTextRunes {
+	if narrowed && n > 0 && n <= template.MaxMessageTextRunes {
 		actions = append(actions, template.QuickReplyAction{Label: "擴大搜尋", Text: criteria.SearchTerm})
 	}
 	return append(actions, template.QuickReplyAction{Label: "使用說明", Text: helpCommand})

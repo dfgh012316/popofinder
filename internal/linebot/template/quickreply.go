@@ -2,6 +2,9 @@ package template
 
 import "encoding/json"
 
+// MaxMessageTextRunes is LINE's limit for the text a message action sends.
+const MaxMessageTextRunes = 300
+
 // QuickReplyAction is a message-type quick reply button: tapping it sends Text as the user.
 // LINE limits Label to 20 characters and Text to 300.
 type QuickReplyAction struct {

@@ -4,9 +4,35 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/dfgh012316/popofinder/internal/database"
 )
+
+// sameDepartmentLabel is the button on every doctor card that searches the doctor's
+// hospital and department (docs/open-decisions.md OD-14), whatever the education says.
+const sameDepartmentLabel = "同院同科醫師"
+
+// sameDepartmentSearchText is what the button sends: a keyword search a user could
+// type, in the doctor's city, for the hospital and the first department listed. It is
+// "" when either is missing or the text is over LINE's limit.
+func sameDepartmentSearchText(p database.MedicalPersonnel) string {
+	depts := strings.FieldsFunc(p.Department.String, func(r rune) bool {
+		return r == '、' || r == '/' || r == '／' || unicode.IsSpace(r)
+	})
+	hospital := strings.Fields(p.Hospital)
+	if len(depts) == 0 || len(hospital) == 0 {
+		return ""
+	}
+	words := append(append([]string{p.City}, hospital...), depts[0])
+	text := strings.TrimSpace(strings.Join(words, " "))
+	if utf8.RuneCountInString(text) > MaxMessageTextRunes {
+		return ""
+	}
+	return text
+}
 
 func strOrDefault(ns sql.NullString) string {
 	if ns.Valid && ns.String != "" {
@@ -98,7 +124,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 		bodyContents = append(bodyContents, urlRow)
 	}
 
-	return map[string]any{
+	bubble := map[string]any{
 		"type": "bubble",
 		"header": map[string]any{
 			"type":   "box",
@@ -121,6 +147,19 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 			"backgroundColor": "#FFFFFF",
 		},
 	}
+	if text := sameDepartmentSearchText(p); text != "" {
+		bubble["footer"] = map[string]any{
+			"type":   "box",
+			"layout": "vertical",
+			"contents": []any{map[string]any{
+				"type":   "button",
+				"style":  "link",
+				"height": "sm",
+				"action": map[string]any{"type": "message", "label": sameDepartmentLabel, "text": text},
+			}},
+		}
+	}
+	return bubble
 }
 
 // DoctorsFlexMessage builds the raw JSON for a flex message containing a carousel
