@@ -27,8 +27,11 @@ const (
 	// maxPages caps how far one search can page (200 results): wide searches have
 	// to be narrowed, and the whole database cannot be paged through (OD-17).
 	maxPages = 20
-	// searchesPerMinute is how many search pages one IP may load per minute.
+	// searchesPerMinute and searchesPerDay are how many search pages one IP may load
+	// per minute and per day. Copying the database takes about 1,300 page loads
+	// (OD-17); people search a few times a day.
 	searchesPerMinute = 30
+	searchesPerDay    = 100
 	// lineAddURL adds the LINE bot as a friend.
 	lineAddURL = "https://lin.ee/h1GxF9s"
 )
@@ -56,13 +59,18 @@ var _ store = (*database.Repository)(nil)
 
 // Handler serves the web pages.
 type Handler struct {
-	store   store
-	limiter *limiter
+	store     store
+	perMinute *limiter
+	perDay    *limiter
 }
 
 // New returns the web pages backed by s.
 func New(s store) *Handler {
-	return &Handler{store: s, limiter: newLimiter(searchesPerMinute, time.Minute)}
+	return &Handler{
+		store:     s,
+		perMinute: newLimiter(searchesPerMinute, time.Minute),
+		perDay:    newLimiter(searchesPerDay, 24*time.Hour),
+	}
 }
 
 // Register adds the web routes to r.
@@ -141,8 +149,14 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	p := page{Title: q, Query: q, NoIndex: true}
-	if !h.limiter.allow(clientIP(r), time.Now()) {
+	ip, now := clientIP(r), time.Now()
+	if !h.perMinute.allow(ip, now) {
 		p.Content = "查詢太頻繁，請稍等一分鐘再試。"
+		render(w, http.StatusTooManyRequests, "message", p)
+		return
+	}
+	if !h.perDay.allow(ip, now) {
+		p.Content = "今天的查詢次數已達上限，請明天再試。"
 		render(w, http.StatusTooManyRequests, "message", p)
 		return
 	}

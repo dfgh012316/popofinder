@@ -184,6 +184,20 @@ func TestSearchIsRateLimitedPerIP(t *testing.T) {
 	require.Len(t, f.offsets, searchesPerMinute+1)
 }
 
+func TestSearchIsLimitedPerDay(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	h := New(f)
+	h.perMinute = newLimiter(searchesPerDay+1, time.Minute) // only the daily limit applies
+	for i := 0; i < searchesPerDay; i++ {
+		require.Equal(t, http.StatusOK, serve(t, h, "/search?q=陳&page=2", "CF-Connecting-IP", "203.0.113.7").Code, "paging counts too")
+	}
+	rec := serve(t, h, "/search?q=陳", "CF-Connecting-IP", "203.0.113.7")
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	require.Contains(t, rec.Body.String(), "今天的查詢次數已達上限")
+	require.Equal(t, http.StatusOK, serve(t, h, "/search?q=陳", "CF-Connecting-IP", "203.0.113.8").Code, "another IP is not affected")
+	require.Len(t, f.offsets, searchesPerDay+1)
+}
+
 func TestLimiterWindowResets(t *testing.T) {
 	l := newLimiter(2, time.Minute)
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
