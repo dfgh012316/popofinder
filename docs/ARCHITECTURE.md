@@ -2,6 +2,11 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-01 — CI 只在會改變 image 的改動時跑
+- `.github/workflows/ci.yaml` 的 `pull_request` 加 `paths`：`cmd/`、`internal/`、`migrations/`、`go.mod`、`go.sum`、`dockerfile`、`.dockerignore`、`makefile`、`ci.yaml` 本身，排除 `*_test.go` 與 `testdata/`。只改文件、README、`assets/`、`scripts/` 或測試的 PR merge 後不 build、不部署；`workflow_dispatch` 照舊可以手動跑。
+- 因此 production 的 image tag 是最後一個觸發 CI 的 merge commit，不一定是 develop 的 HEAD。
+- 代價：只改測試或 `assets/richmenu/` 的 PR，CI 不會跑 `go test`（本來就只在 merge 後跑），要在本機跑過。
+
 ### 2026-11-01 — 圖文選單放 repo；「回報」回覆補充與更正的寄信方式
 - 新 `assets/richmenu/`：`richmenu.json`（選單定義）、`richmenu.html`（產圖原始檔，檔頭有產圖指令）、`richmenu.png`。`scripts/richmenu/apply.sh` 用 Messaging API 驗證 → 建立 → 上傳圖片 → 設為預設 → 刪除其他 API 選單，token 讀 `LINE_MESSAGE_CHANNEL_TOKEN`、經 stdin 給 curl。規則與理由見 OD-16。
 - 新 `template.ReportCommand`（「回報」）、`template.ContactEmail`、`template.ReportTextMessage()`（文字訊息，不是 Flex）；handler 收到「回報」或 `report` 改為回覆它（原本不回應）。說明卡「下架與更正」改為「補充、更正與下架」並提示「回報」，信箱改用 `ContactEmail`。規則見 OD-15。

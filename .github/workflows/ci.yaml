@@ -6,6 +6,21 @@ on:
       - closed
     branches:
       - develop
+    # Only changes that can change the image (or how it is built and deployed) run the
+    # pipeline; docs, README, assets and scripts do not. Tests and test fixtures are not
+    # in the image either. workflow_dispatch still builds anything on demand.
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "migrations/**"
+      - "go.mod"
+      - "go.sum"
+      - "dockerfile"
+      - ".dockerignore"
+      - "makefile"
+      - ".github/workflows/ci.yaml"
+      - "!**/*_test.go"
+      - "!**/testdata/**"
   workflow_dispatch:
 
 jobs:
