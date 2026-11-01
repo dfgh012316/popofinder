@@ -59,9 +59,13 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{listMsg})
 	}
 
-	// Ignore report command
-	if lower == "回報" || lower == "report" {
-		return nil
+	// How to add, correct or take down data (OD-15)
+	if text == template.ReportCommand || lower == "report" {
+		reportMsg, err := template.ReportTextMessage()
+		if err != nil {
+			return err
+		}
+		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{reportMsg})
 	}
 
 	// Parse and execute search

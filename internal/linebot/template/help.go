@@ -175,14 +175,15 @@ var helpContents = map[string]any{
 						},
 					},
 					map[string]any{"type": "separator", "margin": "lg"},
-					// Takedown and correction contact (OD-9): by email with proof, no in-bot button.
+					// Additions, corrections and takedowns (OD-9, OD-15): by email with proof, no
+					// in-bot button; 「回報」 shows what an addition needs.
 					map[string]any{
 						"type":   "box",
 						"layout": "vertical",
 						"margin": "lg",
 						"contents": []any{
-							map[string]any{"type": "text", "text": "下架與更正", "weight": "bold", "size": "lg"},
-							map[string]any{"type": "text", "text": "醫師本人或院所要求下架或更正資料，請寄信至 jerrychuang@jerrytech.me，並以院所官方信箱來信，或附上可證明身分的資料。", "size": "sm", "color": "#666666", "wrap": true, "margin": "sm"},
+							map[string]any{"type": "text", "text": "補充、更正與下架", "weight": "bold", "size": "lg"},
+							map[string]any{"type": "text", "text": "醫師本人或院所要求下架或更正資料，請寄信至 " + ContactEmail + "，並以院所官方信箱來信，或附上可證明身分的資料。想補充醫師學歷，請輸入「" + ReportCommand + "」看要附什麼。", "size": "sm", "color": "#666666", "wrap": true, "margin": "sm"},
 						},
 					},
 				},

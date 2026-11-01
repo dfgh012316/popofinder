@@ -30,3 +30,4 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 - `make test-integration` — 起本機 Docker `postgres:18.6-bookworm`、套 migrations,跑 `-tags integration` 的 DB 整合測試(`internal/database`)。
 - `go run ./cmd/crawl -sources femh -dry-run` — 醫院官網爬蟲(讀 `DATABASE_URL`;`-dry-run` 只印計畫數量,不寫入)。
 - `go test -tags live ./internal/crawl` — 直接打醫院官網,確認頁面結構沒變(需要網路,CI 不跑)。
+- `LINE_MESSAGE_CHANNEL_TOKEN=... sh scripts/richmenu/apply.sh` — 套用 `assets/richmenu/` 的圖文選單到 token 所屬的頻道(open-decisions OD-16)。

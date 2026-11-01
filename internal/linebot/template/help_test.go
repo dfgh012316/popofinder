@@ -57,7 +57,7 @@ func TestHelpFlexMessageTakedownContact(t *testing.T) {
 	require.NoError(t, err)
 	s := string(raw)
 
-	for _, want := range []string{"下架與更正", "jerrychuang@jerrytech.me", "可證明身分的資料"} {
+	for _, want := range []string{"補充、更正與下架", ContactEmail, "可證明身分的資料", "請輸入「" + ReportCommand + "」"} {
 		require.Contains(t, s, want)
 	}
 }
