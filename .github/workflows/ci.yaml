@@ -6,7 +6,33 @@ on:
       - closed
     branches:
       - develop
+    # Only changes that can change the image (or how it is built and deployed) run the
+    # pipeline; docs, README, assets and scripts do not. Tests and test fixtures are not
+    # in the image either. workflow_dispatch still builds anything on demand.
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "migrations/**"
+      - "go.mod"
+      - "go.sum"
+      - "dockerfile"
+      - ".dockerignore"
+      - "makefile"
+      - ".github/workflows/ci.yaml"
+      - "!**/*_test.go"
+      - "!**/testdata/**"
   workflow_dispatch:
+
+# Runs queue instead of overlapping. Each run builds and deploys its own merge commit,
+# so of two runs started close together the one that finishes last wins: on 2026-11-01
+# the run for #53 finished after the one for #54 and put production back on 1bfa607,
+# without #54. A newer pending run replaces an older pending one, which is fine: its
+# merge commit includes the older one. Closing a PR without merging also starts a run
+# (it builds nothing); it gets a group of its own so it never replaces a pending
+# deployment run.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && !github.event.pull_request.merged && format('unmerged-{0}', github.run_id) || github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
