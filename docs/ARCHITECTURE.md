@@ -2,6 +2,11 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-01 — 圖文選單放 repo；「回報」回覆補充與更正的寄信方式
+- 新 `assets/richmenu/`：`richmenu.json`（選單定義）、`richmenu.html`（產圖原始檔，檔頭有產圖指令）、`richmenu.png`。`scripts/richmenu/apply.sh` 用 Messaging API 驗證 → 建立 → 上傳圖片 → 設為預設 → 刪除其他 API 選單，token 讀 `LINE_MESSAGE_CHANNEL_TOKEN`、經 stdin 給 curl。規則與理由見 OD-16。
+- 新 `template.ReportCommand`（「回報」）、`template.ContactEmail`、`template.ReportTextMessage()`（文字訊息，不是 Flex）；handler 收到「回報」或 `report` 改為回覆它（原本不回應）。說明卡「下架與更正」改為「補充、更正與下架」並提示「回報」，信箱改用 `ContactEmail`。規則見 OD-15。
+- 測試：`TestRichMenuSendsCommands`（選單每一格都送 handler 會回應的指令、圖片尺寸與大小）、`TestReportTextMessage`。
+
 ### 2026-11-01 — 查詢：多個詞、醫院別名、「同院同科醫師」按鈕
 - `search.ParseCriteria` 以空白切詞：開頭縣市（第一個詞是醫院別名時不拆）→ `@醫院`／`@科別`／單獨的 `@` → `TypeAll` 時任一詞是縣市（可帶「市」「縣」）就當縣市、以別名開頭的詞拆開（`splitHospitalAlias`）。`Criteria.SearchTerm` 是以單一空白串接的詞，`Criteria.Terms()` 回傳各詞（沒有詞時回一個空字串，符合全部）；`session` 與 `search_log` 的格式不變。規則與理由見 OD-14。
 - 新 `internal/linebot/search/alias.go`：`hospitalAliasGroups`（`names` 是使用者會打的寫法，`also` 是只拿來比對的寫法）、`HospitalPatterns(term)`（別名組，或不在別名表時加上／去掉「紀念」「綜合」、「X牙醫診所」→「X牙醫」）。
