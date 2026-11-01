@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"strings"
 	"unicode/utf8"
@@ -81,7 +80,7 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 		return err
 	}
 
-	if err := repo.LogSearch(ctx, criteria, stats.TotalCount); err != nil {
+	if err := repo.LogSearch(ctx, criteria, stats.TotalCount, database.ChannelLINE); err != nil {
 		slog.Error("log search", "err", err)
 	}
 
@@ -98,7 +97,7 @@ func buildSearchResponse(criteria search.Criteria, personnel []database.MedicalP
 	// Summary text message
 	summaryJSON, err := json.Marshal(map[string]any{
 		"type": "text",
-		"text": formatSummary(criteria, stats),
+		"text": template.SearchSummary(criteria, stats),
 	})
 	if err != nil {
 		return nil, err
@@ -120,7 +119,7 @@ func buildSearchResponse(criteria search.Criteria, personnel []database.MedicalP
 
 	// "Next page" button if there are more results
 	if stats.HasMore {
-		nextOffset := stats.CurrentPage * 10
+		nextOffset := stats.CurrentPage * database.PageSize
 		nextPageMsg, err := template.NextPageFlexMessage(stats.CurrentPage, stats.TotalPages, nextOffset)
 		if err != nil {
 			return nil, err
@@ -129,55 +128,6 @@ func buildSearchResponse(criteria search.Criteria, personnel []database.MedicalP
 	}
 
 	return messages, nil
-}
-
-// coverageNote ends every summary that has results (OD-11): the data now covers
-// doctors educated in Taiwan as well as abroad, so a match by itself means nothing.
-const coverageNote = "收錄台灣與國外畢業的醫師，學歷請以卡片為準"
-
-func formatSummary(criteria search.Criteria, stats database.SearchStats) string {
-	var location string
-	if criteria.City != nil {
-		location = "在" + *criteria.City
-	} else {
-		location = "全台"
-	}
-
-	typeText := map[search.SearchType]string{
-		search.TypeAll:        "",
-		search.TypeHospital:   "醫院",
-		search.TypeDepartment: "科別",
-	}[criteria.SearchType]
-
-	header := fmt.Sprintf("查詢%s%s「%s」", location, typeText, criteria.SearchTerm)
-	if stats.TotalCount == 0 {
-		return header + "\n共有 0 筆符合的結果"
-	}
-
-	countLine := fmt.Sprintf("共有 %d 筆符合的結果", stats.TotalCount)
-	if criteria.SearchType == search.TypeAll {
-		var groups []string
-		for _, g := range []struct {
-			label string
-			n     int
-		}{
-			{"姓名", stats.MatchCounts.Name},
-			{"醫院", stats.MatchCounts.Hospital},
-			{"科別", stats.MatchCounts.Department},
-		} {
-			if g.n > 0 {
-				groups = append(groups, fmt.Sprintf("%s %d", g.label, g.n))
-			}
-		}
-		countLine += "（" + strings.Join(groups, "、") + "）"
-	}
-
-	start := stats.CurrentPage*10 - 9
-	end := stats.CurrentPage * 10
-	if end > stats.TotalCount {
-		end = stats.TotalCount
-	}
-	return fmt.Sprintf("%s\n%s\n目前顯示第 %d - %d 筆\n%s", header, countLine, start, end, coverageNote)
 }
 
 // zeroResultActions suggests next steps when a search finds nothing: widen a narrowed

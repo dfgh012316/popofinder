@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  Source of internal/web/static/og.png, the Open Graph image (docs/open-decisions.md OD-17).
+  Render at 1200x630 with Noto Sans CJK TC installed:
+    npx playwright screenshot --viewport-size=1200,630 assets/web/og.html internal/web/static/og.png
+-->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: "Noto Sans CJK TC", "Noto Sans TC", sans-serif;
+    background: #ffffff; color: #222;
+    border-top: 14px solid #1DB446; box-sizing: border-box;
+    display: flex; flex-direction: column; justify-content: center; padding: 0 84px;
+  }
+  .brand { display: flex; align-items: center; gap: 22px; }
+  .logo { width: 96px; height: 96px; border-radius: 24px; background: #1DB446; display: flex; align-items: center; justify-content: center; }
+  .logo svg { width: 60px; height: 60px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; }
+  .name { font-size: 64px; font-weight: 700; letter-spacing: 1px; }
+  h1 { margin: 46px 0 0; font-size: 68px; font-weight: 700; line-height: 1.25; }
+  .tags { margin-top: 40px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .tag { font-size: 32px; color: #13853a; background: #e8f7ec; border-radius: 999px; padding: 10px 26px; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></div>
+    <div class="name">POPO Finder</div>
+  </div>
+  <h1>查醫師在哪裡受醫學教育</h1>
+  <div class="tags">
+    <div class="tag">附來源連結可核對</div>
+    <div class="tag">台灣與國外畢業都收</div>
+    <div class="tag">不貼標籤、不評價</div>
+  </div>
+</body>
+</html>

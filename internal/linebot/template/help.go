@@ -2,6 +2,9 @@ package template
 
 import "encoding/json"
 
+// CoverageText says what is listed (OD-11), on the help card and the web home page.
+const CoverageText = "收錄醫療院所官網、網路公開彙整與民眾回報的醫師學歷，台灣與國外畢業的都有。查得到不代表任何結論，請以卡片上的學歷為準；查不到也不代表什麼。"
+
 var helpContents = map[string]any{
 	"type": "bubble",
 	"body": map[string]any{
@@ -32,7 +35,7 @@ var helpContents = map[string]any{
 						"layout": "vertical",
 						"contents": []any{
 							map[string]any{"type": "text", "text": "收錄範圍", "weight": "bold", "size": "lg"},
-							map[string]any{"type": "text", "text": "收錄醫療院所官網、網路公開彙整與民眾回報的醫師學歷，台灣與國外畢業的都有。查得到不代表任何結論，請以卡片上的學歷為準；查不到也不代表什麼。", "size": "sm", "color": "#666666", "wrap": true, "margin": "sm"},
+							map[string]any{"type": "text", "text": CoverageText, "size": "sm", "color": "#666666", "wrap": true, "margin": "sm"},
 						},
 					},
 					map[string]any{"type": "separator", "margin": "lg"},

@@ -1,0 +1,289 @@
+// Package web serves the POPO Finder web version (docs/open-decisions.md OD-17): the
+// same search, doctor cards and texts as the LINE bot, rendered as HTML by this binary.
+package web
+
+import (
+	"bytes"
+	"context"
+	"embed"
+	"html/template"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/dfgh012316/popofinder/internal/database"
+	"github.com/dfgh012316/popofinder/internal/linebot/search"
+	linetemplate "github.com/dfgh012316/popofinder/internal/linebot/template"
+)
+
+const (
+	// maxPages caps how far one search can page (200 results): wide searches have
+	// to be narrowed, and the whole database cannot be paged through (OD-17).
+	maxPages = 20
+	// searchesPerMinute and searchesPerDay are how many search pages one IP may load
+	// per minute and per day. Copying the database takes about 1,300 page loads
+	// (OD-17); people search a few times a day.
+	searchesPerMinute = 30
+	searchesPerDay    = 100
+	// lineAddURL adds the LINE bot as a friend.
+	lineAddURL = "https://lin.ee/h1GxF9s"
+)
+
+//go:embed templates/*.html
+var templateFS embed.FS
+
+// pages holds one template set per page, each the layout plus that page's content.
+var pages = func() map[string]*template.Template {
+	m := map[string]*template.Template{}
+	for _, name := range []string{"home", "results", "hospitals", "report", "message"} {
+		m[name] = template.Must(template.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
+	}
+	return m
+}()
+
+// store is what the pages read and write; *database.Repository satisfies it.
+type store interface {
+	Search(criteria search.Criteria, offset int) ([]database.MedicalPersonnel, database.SearchStats, error)
+	LogSearch(ctx context.Context, criteria search.Criteria, resultCount int, channel string) error
+	DirectoryHospitals(ctx context.Context) ([]database.DirectoryHospital, error)
+}
+
+var _ store = (*database.Repository)(nil)
+
+// Handler serves the web pages.
+type Handler struct {
+	store     store
+	perMinute *limiter
+	perDay    *limiter
+}
+
+// New returns the web pages backed by s.
+func New(s store) *Handler {
+	return &Handler{
+		store:     s,
+		perMinute: newLimiter(searchesPerMinute, time.Minute),
+		perDay:    newLimiter(searchesPerDay, 24*time.Hour),
+	}
+}
+
+// Register adds the web routes to r.
+func (h *Handler) Register(r chi.Router) {
+	r.Group(func(r chi.Router) {
+		r.Use(securityHeaders)
+		r.Get("/", h.home)
+		r.Get("/search", h.search)
+		r.Get("/hospitals", h.hospitals)
+		r.Get("/report", h.report)
+		r.Get("/robots.txt", staticFile("robots.txt", "text/plain; charset=utf-8"))
+		r.Get("/sitemap.xml", staticFile("sitemap.xml", "application/xml; charset=utf-8"))
+		r.Get("/llms.txt", serveBytes(llmsTxt, "text/plain; charset=utf-8"))
+		r.Get("/og.png", staticFile("og.png", "image/png"))
+		r.Get("/favicon.svg", staticFile("favicon.svg", "image/svg+xml"))
+	})
+}
+
+// page is what every page passes to the layout.
+type page struct {
+	Title       string // "" on the home page
+	Description string // "" means siteDescription
+	Canonical   string // full URL of a page that may be indexed; "" for search results
+	Query       string // the search box value
+	NoIndex     bool
+	JSONLD      template.JS
+	Content     any
+
+	// Set by render.
+	HeadTitle, OGImage, LineURL string
+}
+
+// example is a search shown on the home page, the same kinds as the help card's.
+type example struct{ Query, Note string }
+
+var examples = []example{
+	{"陳", "姓名、醫院或科別含「陳」"},
+	{"三總 牙科", "三總的牙科醫師"},
+	{"台北 牙科", "台北的牙科醫師，縣市可以放在任何位置"},
+	{"台北@醫院 三總", "只比對醫院名稱"},
+	{"台北@科別 心臟", "只比對科別，打部分字即可"},
+}
+
+func (h *Handler) home(w http.ResponseWriter, r *http.Request) {
+	render(w, http.StatusOK, "home", page{Canonical: siteURL + "/", JSONLD: homeJSONLD, Content: struct {
+		Coverage    string
+		Examples    []example
+		LineURL     string
+		Differences []point
+		FAQs        any
+	}{linetemplate.CoverageText, examples, lineAddURL, differences, faqs}})
+}
+
+type resultCard struct {
+	linetemplate.Card
+	SameDepartmentLabel string
+	SourceLinkLabel     string
+}
+
+type results struct {
+	Query    string
+	Summary  string
+	Cards    []resultCard
+	NoResult string
+	PrevPage int // 0 when there is none
+	NextPage int // 0 when there is none
+	Capped   bool
+	CappedAt int
+}
+
+func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	p := page{Title: q, Query: q, NoIndex: true}
+	ip, now := clientIP(r), time.Now()
+	if !h.perMinute.allow(ip, now) {
+		p.Content = "查詢太頻繁，請稍等一分鐘再試。"
+		render(w, http.StatusTooManyRequests, "message", p)
+		return
+	}
+	if !h.perDay.allow(ip, now) {
+		p.Content = "今天的查詢次數已達上限，請明天再試。"
+		render(w, http.StatusTooManyRequests, "message", p)
+		return
+	}
+	if utf8.RuneCountInString(q) > linetemplate.MaxMessageTextRunes {
+		p.Content = "查詢太長，請縮短後再試。"
+		render(w, http.StatusBadRequest, "message", p)
+		return
+	}
+
+	pageNo, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageNo = min(max(pageNo, 1), maxPages)
+	criteria := search.ParseCriteria(q)
+	personnel, stats, err := h.store.Search(criteria, (pageNo-1)*database.PageSize)
+	if err != nil {
+		slog.Error("web search", "err", err)
+		p.Content = "查詢失敗，請稍後再試。"
+		render(w, http.StatusInternalServerError, "message", p)
+		return
+	}
+	if len(personnel) == 0 && stats.TotalCount > 0 {
+		// A page past the last one.
+		http.Redirect(w, r, "/search?q="+url.QueryEscape(q), http.StatusSeeOther)
+		return
+	}
+	if pageNo == 1 {
+		// Only the first page is a new search, as in LINE where paging is a postback.
+		if err := h.store.LogSearch(r.Context(), criteria, stats.TotalCount, database.ChannelWeb); err != nil {
+			slog.Error("log search", "err", err)
+		}
+	}
+
+	res := results{Query: q, Summary: linetemplate.SearchSummary(criteria, stats), CappedAt: maxPages * database.PageSize}
+	for _, person := range personnel {
+		res.Cards = append(res.Cards, resultCard{
+			Card:                linetemplate.NewCard(person),
+			SameDepartmentLabel: linetemplate.SameDepartmentLabel,
+			SourceLinkLabel:     linetemplate.SourceLinkLabel,
+		})
+	}
+	if len(personnel) == 0 {
+		res.NoResult = linetemplate.NoResultsText
+	}
+	if pageNo > 1 {
+		res.PrevPage = pageNo - 1
+	}
+	if stats.HasMore {
+		if pageNo < maxPages {
+			res.NextPage = pageNo + 1
+		} else {
+			res.Capped = true
+		}
+	}
+	p.Content = res
+	render(w, http.StatusOK, "results", p)
+}
+
+type hospitalLink struct {
+	Label, Query string
+}
+
+func (h *Handler) hospitals(w http.ResponseWriter, r *http.Request) {
+	hs, err := h.store.DirectoryHospitals(r.Context())
+	if err != nil {
+		slog.Error("web hospitals", "err", err)
+		render(w, http.StatusInternalServerError, "message", page{Content: "讀取失敗，請稍後再試。"})
+		return
+	}
+	links := make([]hospitalLink, len(hs))
+	for i, x := range hs {
+		links[i] = hospitalLink{Label: x.Hospital + " " + strconv.Itoa(x.Count) + " 位", Query: linetemplate.HospitalSearchText(x)}
+	}
+	render(w, http.StatusOK, "hospitals", page{Title: "醫院清單", Canonical: siteURL + "/hospitals",
+		Description: "收錄了官網醫師名單的醫院與人數，點醫院名稱即可查詢該院醫師的學歷。", Content: struct {
+			Links []hospitalLink
+			Note  string
+		}{links, linetemplate.HospitalListNote}})
+}
+
+func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
+	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Canonical: siteURL + "/report",
+		Description: "醫師或院所補充學歷、更正資料或要求下架的方式。", Content: struct {
+			Text, Email string
+		}{linetemplate.ReportText, linetemplate.ContactEmail}})
+}
+
+func render(w http.ResponseWriter, status int, name string, p page) {
+	p.LineURL = lineAddURL
+	p.OGImage = siteURL + "/og.png"
+	if p.Description == "" {
+		p.Description = siteDescription
+	}
+	p.HeadTitle = "POPO Finder 醫師學歷查詢｜查醫師在哪裡受醫學教育"
+	if p.Title != "" {
+		p.HeadTitle = p.Title + " - POPO Finder 醫師學歷查詢"
+	}
+	var buf bytes.Buffer
+	if err := pages[name].ExecuteTemplate(&buf, "layout", p); err != nil {
+		slog.Error("web render", "page", name, "err", err)
+		http.Error(w, "頁面產生失敗", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
+}
+
+// securityHeaders: no scripts or outside resources, and no Referer, so a hospital
+// site opened from a card does not learn what was searched.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// clientIP is the visitor's address. Requests arrive through the Cloudflare tunnel,
+// which sets CF-Connecting-IP; RemoteAddr is the tunnel itself.
+func clientIP(r *http.Request) string {
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}

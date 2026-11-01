@@ -1,0 +1,8 @@
+{{define "content"}}
+<h1>已收錄官網醫師名單的醫院</h1>
+<p class="muted">點醫院名稱即可查詢</p>
+<ul class="links">
+{{range .Links}}<li><a href="/search?q={{.Query}}">{{.Label}}</a></li>
+{{end}}</ul>
+<p class="muted">{{.Note}}</p>
+{{end}}

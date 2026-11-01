@@ -1,0 +1,20 @@
+{{define "content"}}
+<div class="box summary">{{.Summary}}</div>
+{{with .NoResult}}<div class="box empty">{{.}}</div>
+<p class="muted">可以試試減少條件、改用醫院簡稱，或看<a href="/">查詢說明</a>。查不到也不代表什麼。</p>{{end}}
+<div class="cards">
+{{range .Cards}}{{$c := .}}<article class="card">
+<h2>{{.Name}}</h2>
+<dl>
+{{range .Rows}}<dt>{{.Label}}</dt><dd>{{.Value}}</dd>
+{{end}}{{if .SourceURL}}<dt>{{.SourceLinkLabel}}</dt><dd><a href="{{.SourceURL}}" target="_blank" rel="noopener noreferrer nofollow">{{.SourceURLText}}</a></dd>
+{{end}}</dl>
+{{with .SameDepartmentText}}<div class="more"><a href="/search?q={{.}}">{{$c.SameDepartmentLabel}}</a></div>{{end}}
+</article>
+{{end}}</div>
+{{if .Capped}}<p class="muted">結果太多，只顯示前 {{.CappedAt}} 筆。請加上縣市、醫院或科別縮小範圍。</p>{{end}}
+{{if or .PrevPage .NextPage}}<nav class="pager">
+{{if .PrevPage}}<a href="/search?q={{.Query}}&page={{.PrevPage}}">‹ 上一頁</a>{{else}}<span></span>{{end}}
+{{if .NextPage}}<a href="/search?q={{.Query}}&page={{.NextPage}}">下一頁 ›</a>{{end}}
+</nav>{{end}}
+{{end}}

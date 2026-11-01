@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學系畢業 / 波波)的服務。Go + Postgres,目前介面為 LINE bot,自架部署於樹莓派。
+POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學系畢業 / 波波)的服務。Go + Postgres,介面為 LINE bot 與網頁版(`popo.jerrytech.me`),自架部署於樹莓派。
 
 ## ⚠️ 討論新功能前,先讀產品方向
 
@@ -17,8 +17,8 @@ POPO Finder — 讓使用者查詢台灣醫師學歷背景(是否為台灣醫學
 
 ## 架構
 
-- Go 單體,監聽 `:8000`,使用 chi router。對外端點:`POST /api/linebot/callback`(LINE webhook)、`GET /health`(liveness)、`GET /readyz`(查 DB)、`GET /version`(回 `APP_VERSION`)。
-- `cmd/server/main.go` 進入點;`internal/` 下分 config / database / server / linebot(client·handler·search·session·template·webhook)。`cmd/crawl` + `internal/crawl` 是醫院官網爬蟲(open-decisions OD-7、OD-10)。
+- Go 單體,監聽 `:8000`,使用 chi router。對外端點:`POST /api/linebot/callback`(LINE webhook)、`GET /health`(liveness)、`GET /readyz`(查 DB)、`GET /version`(回 `APP_VERSION`);網頁版 `GET /`、`/search`、`/hospitals`、`/report`、`/robots.txt`(`internal/web`,OD-17)。
+- `cmd/server/main.go` 進入點;`internal/` 下分 config / database / server / linebot(client·handler·search·session·template·webhook) / web(網頁版,共用 linebot/template 的卡片與文字)。`cmd/crawl` + `internal/crawl` 是醫院官網爬蟲(open-decisions OD-7、OD-10)。
 - DB:Postgres,透過 sqlx + pgx;四張表:`medical_personnel`(id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at, source_key)、`medical_personnel_history`(由 trigger 記錄前者每一次異動,只改查到日期不記;批次修改前先 `SET LOCAL popo.change_reason`;下架用 `SELECT takedown_personnel(<id>);` 連同歷史清除,見 open-decisions OD-8、OD-9)、`takedown_suppressions`(被下架的官網醫師,爬蟲跳過,見 OD-10)與 `search_log`(查詢紀錄,刻意不存使用者,見 open-decisions OD-5)。
 - 設定由環境變數載入(`internal/config`),`.env` 可選;見 `.env.example`。
 

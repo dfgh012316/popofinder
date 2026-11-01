@@ -11,9 +11,54 @@ import (
 	"github.com/dfgh012316/popofinder/internal/database"
 )
 
-// sameDepartmentLabel is the button on every doctor card that searches the doctor's
+// SameDepartmentLabel is the button on every doctor card that searches the doctor's
 // hospital and department (docs/open-decisions.md OD-14), whatever the education says.
-const sameDepartmentLabel = "同院同科醫師"
+const SameDepartmentLabel = "同院同科醫師"
+
+// SourceLinkLabel labels the row that links to where the data came from.
+const SourceLinkLabel = "來源連結"
+
+// NoResultsText is shown when a search finds nothing.
+const NoResultsText = "找不到相關資料"
+
+// CardRow is one label and value on a doctor card.
+type CardRow struct {
+	Label, Value string
+	Wrap         bool // the LINE card wraps long values instead of cutting them off
+}
+
+// Card is what a doctor card shows. The LINE bubble and the web page (OD-17) both
+// render it, so the two show the same fields with the same labels.
+type Card struct {
+	Name               string
+	Rows               []CardRow
+	SourceURL          string // "" when there is no source link
+	SourceURLText      string
+	SameDepartmentText string // what 「同院同科醫師」 searches; "" when there is no button
+}
+
+// NewCard builds the card for one doctor.
+func NewCard(p database.MedicalPersonnel) Card {
+	c := Card{
+		Name: p.Name,
+		Rows: []CardRow{
+			{Label: "縣市", Value: strVal(p.City)},
+			{Label: "醫院", Value: strVal(p.Hospital), Wrap: true},
+			{Label: "科別", Value: strOrDefault(p.Department)},
+			{Label: "學歷", Value: strOrDefault(p.Education), Wrap: true},
+			{Label: "資料來源", Value: sourceLabel(p.Source), Wrap: true},
+		},
+		SameDepartmentText: sameDepartmentSearchText(p),
+	}
+	if p.SourceURL.Valid && p.SourceURL.String != "" {
+		c.SourceURL = p.SourceURL.String
+		c.SourceURLText = "點此查看來源"
+		if p.SourceCheckedAt.Valid {
+			c.SourceURLText = fmt.Sprintf("點此查看來源（%s 查到）", p.SourceCheckedAt.Time.Format("2006-01-02"))
+		}
+	}
+	return c
+}
 
 // sameDepartmentSearchText is what the button sends: a keyword search a user could
 // type, in the doctor's city, for the hospital and the first department listed. It is
@@ -91,33 +136,27 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 		return box
 	}
 
-	cityRow := row("縣市", strVal(p.City), nil)
-
-	hospitalRow := row("醫院", strVal(p.Hospital), map[string]any{"wrap": true})
-	hospitalRow["margin"] = "md"
-
-	deptRow := row("科別", strOrDefault(p.Department), nil)
-	deptRow["margin"] = "md"
-
-	eduRow := row("學歷", strOrDefault(p.Education), map[string]any{"wrap": true})
-	eduRow["margin"] = "md"
-
-	sourceRow := row("資料來源", sourceLabel(p.Source), map[string]any{"wrap": true})
-	sourceRow["margin"] = "md"
-
-	bodyContents := []any{cityRow, hospitalRow, deptRow, eduRow, sourceRow}
-	if p.SourceURL.Valid && p.SourceURL.String != "" {
-		urlText := "點此查看來源"
-		if p.SourceCheckedAt.Valid {
-			urlText = fmt.Sprintf("點此查看來源（%s 查到）", p.SourceCheckedAt.Time.Format("2006-01-02"))
+	c := NewCard(p)
+	var bodyContents []any
+	for i, r := range c.Rows {
+		var extra map[string]any
+		if r.Wrap {
+			extra = map[string]any{"wrap": true}
 		}
-		urlRow := row("來源連結", urlText, map[string]any{
+		box := row(r.Label, r.Value, extra)
+		if i > 0 {
+			box["margin"] = "md"
+		}
+		bodyContents = append(bodyContents, box)
+	}
+	if c.SourceURL != "" {
+		urlRow := row(SourceLinkLabel, c.SourceURLText, map[string]any{
 			"wrap":  true,
 			"color": "#0066CC",
 			"action": map[string]any{
 				"type":  "uri",
 				"label": "查看來源",
-				"uri":   p.SourceURL.String,
+				"uri":   c.SourceURL,
 			},
 		})
 		urlRow["margin"] = "md"
@@ -132,7 +171,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 			"contents": []any{
 				map[string]any{
 					"type":   "text",
-					"text":   p.Name,
+					"text":   c.Name,
 					"size":   "xl",
 					"weight": "bold",
 					"color":  "#4A4A4A",
@@ -147,7 +186,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 			"backgroundColor": "#FFFFFF",
 		},
 	}
-	if text := sameDepartmentSearchText(p); text != "" {
+	if text := c.SameDepartmentText; text != "" {
 		bubble["footer"] = map[string]any{
 			"type":   "box",
 			"layout": "vertical",
@@ -155,7 +194,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 				"type":   "button",
 				"style":  "link",
 				"height": "sm",
-				"action": map[string]any{"type": "message", "label": sameDepartmentLabel, "text": text},
+				"action": map[string]any{"type": "message", "label": SameDepartmentLabel, "text": text},
 			}},
 		}
 	}
@@ -169,7 +208,7 @@ func DoctorsFlexMessage(personnel []database.MedicalPersonnel) (json.RawMessage,
 	var contents map[string]any
 
 	if len(personnel) == 0 {
-		altText = "找不到相關資料"
+		altText = NoResultsText
 		contents = map[string]any{
 			"type": "bubble",
 			"body": map[string]any{
@@ -178,7 +217,7 @@ func DoctorsFlexMessage(personnel []database.MedicalPersonnel) (json.RawMessage,
 				"contents": []any{
 					map[string]any{
 						"type":   "text",
-						"text":   "找不到相關資料",
+						"text":   NoResultsText,
 						"size":   "lg",
 						"weight": "bold",
 						"align":  "center",

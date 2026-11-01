@@ -45,6 +45,9 @@ type MatchCounts struct {
 	Department int
 }
 
+// PageSize is how many results Search returns per offset.
+const PageSize = 10
+
 type SearchStats struct {
 	TotalCount  int
 	CurrentPage int
@@ -148,8 +151,8 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 		orderBy = matchRankExpr + ", " + tieBreakOrder
 	}
 	dataSQL := fmt.Sprintf(
-		"SELECT "+selectColumns+" FROM medical_personnel %s ORDER BY %s LIMIT 10 OFFSET $%d",
-		where, orderBy, len(args)+1,
+		"SELECT "+selectColumns+" FROM medical_personnel %s ORDER BY %s LIMIT %d OFFSET $%d",
+		where, orderBy, PageSize, len(args)+1,
 	)
 	args = append(args, offset)
 
@@ -158,13 +161,13 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 		return nil, SearchStats{}, fmt.Errorf("repository: select: %w", err)
 	}
 
-	currentPage := offset/10 + 1
-	totalPages := (totalCount + 9) / 10
+	currentPage := offset/PageSize + 1
+	totalPages := (totalCount + PageSize - 1) / PageSize
 	stats := SearchStats{
 		TotalCount:  totalCount,
 		CurrentPage: currentPage,
 		TotalPages:  totalPages,
-		HasMore:     (offset + 10) < totalCount,
+		HasMore:     (offset + PageSize) < totalCount,
 	}
 	if criteria.SearchType == search.TypeAll {
 		stats.MatchCounts = MatchCounts{Name: counts.Name, Hospital: counts.Hospital, Department: counts.Department}
@@ -173,12 +176,18 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 	return records, stats, nil
 }
 
+// Where a search came from, for search_log.channel (OD-17).
+const (
+	ChannelLINE = "line"
+	ChannelWeb  = "web"
+)
+
 // LogSearch records one user-initiated search for coverage analysis. It deliberately
-// stores no user identifier (docs/open-decisions.md OD-5).
-func (r *Repository) LogSearch(ctx context.Context, criteria search.Criteria, resultCount int) error {
+// stores no user identifier (docs/open-decisions.md OD-5); channel is ChannelLINE or ChannelWeb.
+func (r *Repository) LogSearch(ctx context.Context, criteria search.Criteria, resultCount int, channel string) error {
 	_, err := r.db.ExecContext(ctx,
-		"INSERT INTO search_log (search_type, city, search_term, result_count) VALUES ($1, $2, $3, $4)",
-		string(criteria.SearchType), criteria.City, criteria.SearchTerm, resultCount,
+		"INSERT INTO search_log (search_type, city, search_term, result_count, channel) VALUES ($1, $2, $3, $4, $5)",
+		string(criteria.SearchType), criteria.City, criteria.SearchTerm, resultCount, channel,
 	)
 	if err != nil {
 		return fmt.Errorf("repository: log search: %w", err)

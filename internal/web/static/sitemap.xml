@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  只列可以收錄的頁面；/search 不列（OD-17）。
+  刻意不寫 lastmod：這些頁面的內容隨資料變動，填不準的日期會讓搜尋引擎忽略這個欄位。
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://popo.jerrytech.me/</loc></url>
+  <url><loc>https://popo.jerrytech.me/hospitals</loc></url>
+  <url><loc>https://popo.jerrytech.me/report</loc></url>
+</urlset>
