@@ -34,11 +34,14 @@ id=$(line POST "$api/richmenu" -H 'Content-Type: application/json' --data-binary
 echo "created $id"
 
 line POST "https://api-data.line.me/v2/bot/richmenu/$id/content" -H 'Content-Type: image/png' --data-binary "@$dir/richmenu.png" >/dev/null
-line POST "$api/user/all/richmenu/$id" >/dev/null
+echo "uploaded image"
+# curl sends no Content-Length for a request without a body, and LINE answers 411
+# to such a POST; the DELETE below sends it too, to be safe.
+line POST "$api/user/all/richmenu/$id" -H 'Content-Length: 0' >/dev/null
 echo "default rich menu is now $id"
 
 for old in $(line GET "$api/richmenu/list" | grep -o '"richMenuId": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/'); do
 	[ "$old" = "$id" ] && continue
-	line DELETE "$api/richmenu/$old" >/dev/null
+	line DELETE "$api/richmenu/$old" -H 'Content-Length: 0' >/dev/null
 	echo "deleted $old"
 done
