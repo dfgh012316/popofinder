@@ -35,7 +35,7 @@
 | 高雄榮總 | 約 20 個科部子站 `org.vghks.gov.tw/<科部>/News_DoctorList.aspx?n=&sms=`(有 `page`/`PageSize`、「共 N 筆」)→ 個人頁有學歷欄 | 網址參數都是不透明 hash、沒有穩定的醫師 ID;頁尾「未經允許請勿任意轉載、複製或做商業用途」 |
 | 成大 | 14 個以上 RPage 子網域,`<科部>.hosp.ncku.edu.tw/p/405-<site>-<article>,c<cat>.php`,學歷獨立欄位 | 每個子站設定不同,要從醫療團隊頁往下走兩層 |
 | 中山附醫 | `csh.org.tw/DoctorIntro/DoctorIntro.aspx?EmpCode=<id>` 伺服器渲染,學歷獨立欄位 | 科別列表要送表單;另一個 WordPress 站 `web.csh.org.tw/web/doctor/` 的個人頁未驗證 |
-| 台中榮總 | 掛號系統 `register.vghtc.gov.tw/register/regDocSchedule.jsp?init=init&section=<科別>&drno=<id>` 不需 JS、有學歷欄 | 主站要跑 JS(Vue),不跑 JS 拿不到醫師 ID 清單 |
+| 台中榮總 | 掛號系統 `register.vghtc.gov.tw/register/regDocSchedule.jsp?init=init&section=<科別>&drno=<id>` 不需 JS、有學歷欄。**2026-11-02 已收錄**(554 位,見 OD-10 補註) | 主站要跑 JS(Vue);醫師 ID 改從掛號系統的 `listSection.jsp` → `regDoctor.jsp?init=sub&section=<科別>` 取得,只有有門診的醫師;分院各有系統 |
 | 新光 | 國際醫療中心站 `web.skh.org.tw/IHC/` 伺服器渲染、有學歷,但只收約 150–170 人、資料可能停在 2021 | 主站團隊頁原始 HTML 沒有醫師內容;第 11 次請求後連線失敗,可能有頻率限制 |
 | 彰基 | 各科子站 `dpt.cch.org.tw/layout/layout_<1\|3\|4>/doctor.aspx?ID=<科部>`,列表直接有學經歷 | 各科手寫自由文字、至少三種版型、沒有醫師 ID;主站有 `/Trap.aspx`(「請勿點擊此連結」)誘捕爬蟲,**絕對不能跟進** |
 | 花蓮慈濟 | Joomla,`hlm.tzuchi.com.tw/home/index.php/team-<科別>/dr<代號>` | 中央團隊頁抽到的 4 頁沒有學歷標題;學歷可能只在 2011–2017 年的各科子站;`/robots.txt` 回 403 |

@@ -9,6 +9,10 @@
 - 版面全部在 `templates/layout.html` 的 CSS token（紙、墨、鋼筆藍、螢光筆只用在焦點與目前位置；長條兩段是同一個藍的深淺兩階，淺色與深色模式都過 dataviz 的 ordinal 檢查）。結果頁在 960px 以上是兩欄（縮小範圍在右側 sticky），以下縮小範圍排在結果前、每組一行可橫向滑動。
 - 測試：`TestHomeShowsCoverage`、`TestHomeWorksWithoutCoverage`、`TestSearchComposesFormFields`、`TestSearchOffersFacets`、`TestBuildFacets`、`TestRegionsCoverEveryCity`；整合測試 `TestCityCounts`、`TestSearchFacetsUseTheSearchFilter`（加總等於 `Search` 的總數）、`TestDirectoryHospitals` 加查到日期。`TestHeadUsesGetRoutes` 改用不需要 DB 的頁面（首頁現在會查 DB）。
 
+### 2026-11-02 — 官網爬蟲：中榮（`vghtc`）
+- 新 `Source` `Vghtc`（`vghtc:<drno>`），註冊進 `cmd/crawl`：`listSection.jsp` → `regDoctor.jsp?init=sub&section=…` → `regDocSchedule.jsp?init=init&section=…&drno=…`。`parseVghtcDepts` 依 `<th>` 分組，把「特別門診」組（`vghtcSpecialGroup`）移到最後；`parseVghtcDoctors` 讀 `showDoc('<id>',` 去重；`parseVghtcProfile` 讀 `doctorChineseName` 與 `<h5>學歷</h5>` 後的 `<p>`（`htmlLines`）。縣市「台中」、醫院「臺中榮民總醫院」。任一頁失敗就失敗。
+- 測試：`internal/crawl/vghtc_test.go`（合成 fixture `testdata/vghtc/`，虛構姓名）；live test `TestVghtcLive`（最多 6 個請求）。
+
 ### 2026-11-01 — 網頁版（`internal/web`）
 - `internal/web`：chi 路由 `/`、`/search`、`/hospitals`、`/report`、`/robots.txt`，由 `server.routes` 註冊；`html/template`，`templates/*.html` 以 `go:embed` 打包，每頁是 layout 加該頁的 content。`store` interface（`Search`、`LogSearch`、`DirectoryHospitals`）讓測試不需要 DB。規則與理由見 OD-17。
 - 與 LINE 共用：`template.NewCard`（卡片欄位與標籤；LINE bubble 改由它產生，輸出的 JSON 不變）、`template.SearchSummary`（原 handler 的 `formatSummary` 與 `coverageNote` 搬過來）、`CoverageText`、`HospitalListNote`、`HospitalSearchText`、`ReportText`、`NoResultsText`、`SameDepartmentLabel`、`SourceLinkLabel`。每頁 10 筆改為 `database.PageSize`，repository、摘要、LINE 翻頁都用它。
