@@ -14,7 +14,7 @@
 - `template.Summary`／`NewSummary`：摘要拆成縣市、`@` 欄位、詞、總數、各組筆數、本頁範圍；`Text()` 是 LINE 的文字（`SearchSummary` 輸出不變），網頁版自己排版。
 - `internal/web`：`composeQuery` 與首頁表單的 `city`、`hospital`、`dept` 欄位拿掉（`/search` 只讀 `q`）；首頁只用 `loadCoverage` 的總數。新增 `/about`（`about.html`：`CoverageText`、`differences`、`faqs`、補充與更正）；`homeJSONLD` 只剩 WebApplication，FAQPage 移到 `aboutJSONLD`（共用 `ldJSON`）；sitemap、`llms.txt` 加 `/about`。結果頁直接渲染 `template.Card`（`resultCard` 拿掉），固定文字由 `cardLabels` 帶入。
 - CSS：全部改黑體（拿掉明體 token），卡片 grid `minmax(min(100%,22rem),1fr)`（桌面兩欄）；手機在有查詢框的頁面隱藏頁首連結（頁尾有）。`/hospitals` 的醫院清單 class 改 `hosp-list`（`hosp` 給卡片的醫院名）。
-- 寄信的備援：`/report` 在 mailto 按鈕下顯示可一鍵選取的信箱（`.address`，`user-select: all`）與 `gmail(subject)` 產生的 Gmail 網頁版寫信連結；查不到時的寄網址連結文字是信箱（`results.Email`）。
+- 寄信的備援：`/report` 與查不到時的寄網址連結旁有「複製 Email」（layout 的 `copy-email`／`copy-status` 兩個 template，`page.CopyScript` 決定是否載入 `static/copy.js`；按鈕預設 `hidden`，由 script 顯示並寫入剪貼簿），下面一行 `.mail` 小字可一鍵選取。CSP 因此加 `script-src 'self'`（OD-17 2026-11-03 補註）；`TestCopyScript` 確認其他頁面不載入 script。
 - 查不到時：`widerSearches(criteria)` 產生放寬條件的查詢連結（`results.Wider`），加寄網址的 `mailto`（`results.AddURL`）；`TestWiderSearches` 確認每個查詢經 `ParseCriteria` 解析後和標籤說的一樣。
 - 測試：`TestDoctorBubbleLayout`（缺值略過、學歷分行）、`TestSearchSummaryOfAFieldSearch`、`TestSearchCardWithMissingFields`、`TestAboutSEO`；`TestSearchComposesFormFields`、`TestComposeQueryKeepsTheFormsMeaning` 隨 `composeQuery` 拿掉。
 

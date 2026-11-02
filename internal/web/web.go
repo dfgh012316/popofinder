@@ -119,6 +119,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/llms.txt", serveBytes(llmsTxt, "text/plain; charset=utf-8"))
 		r.Get("/og.png", staticFile("og.png", "image/png"))
 		r.Get("/favicon.svg", staticFile("favicon.svg", "image/svg+xml"))
+		r.Get("/copy.js", staticFile("copy.js", "text/javascript; charset=utf-8"))
 	})
 }
 
@@ -133,6 +134,8 @@ type page struct {
 	Content     any
 
 	Nav string // the header link of this page: "hospitals", "about", "report" or ""
+
+	CopyScript bool // the page has a 「複製 Email」 button and loads /copy.js
 
 	// Set by render.
 	HeadTitle, OGImage, LineURL, RepoURL string
@@ -186,7 +189,7 @@ type results struct {
 	NoResult   string
 	Wider      []facetLink // for a search with no results: the same search with one condition dropped
 	AddURL     string      // writes to the contact address to add a doctor's page
-	Email      string      // the contact address, shown as the link text
+	Email      string      // the contact address, for 「複製 Email」
 	Facets     facets
 	PrevPage   int // 0 when there is none
 	NextPage   int // 0 when there is none
@@ -325,6 +328,7 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p.Content = res
+	p.CopyScript = res.NoResult != ""
 	render(w, http.StatusOK, "results", p)
 }
 
@@ -468,19 +472,11 @@ func (h *Handler) hospitals(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Nav: "report", Canonical: siteURL + "/report",
-		Description: "醫師或院所補充學歷、更正資料或要求下架的方式。", Content: struct {
-			Paragraphs                                      []string
-			Email, AddURL, FixURL, GmailAddURL, GmailFixURL string
+		Description: "醫師或院所補充學歷、更正資料或要求下架的方式。", CopyScript: true, Content: struct {
+			Paragraphs            []string
+			Email, AddURL, FixURL string
 		}{strings.Split(linetemplate.ReportText, "\n\n"), linetemplate.ContactEmail,
-			mailto("補充醫師學歷"), mailto("更正或下架"), gmail("補充醫師學歷"), gmail("更正或下架")}})
-}
-
-// gmail opens Gmail's web compose to the contact address with subject filled in.
-// A mailto link does nothing on a computer with no mail program set up, and
-// without scripts there is no copy button (slipkit #71 has one), so the page also
-// shows the address to select and offers this.
-func gmail(subject string) string {
-	return "https://mail.google.com/mail/?view=cm&fs=1&to=" + url.QueryEscape(linetemplate.ContactEmail) + "&su=" + url.QueryEscape(subject)
+			mailto("補充醫師學歷"), mailto("更正或下架")}})
 }
 
 // mailto is a link that writes to the contact address with subject filled in.
@@ -511,8 +507,9 @@ func render(w http.ResponseWriter, status int, name string, p page) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// securityHeaders: no scripts or outside resources, and no Referer, so a hospital
-// site opened from a card does not learn what was searched. no-transform keeps
+// securityHeaders: no outside resources and no script but our own /copy.js (the
+// 「複製 Email」 button), and no Referer, so a hospital site opened from a card
+// does not learn what was searched. no-transform keeps
 // Cloudflare from rewriting the pages: its Email Address Obfuscation replaces the
 // contact address with 「[email protected]」 and adds a script to decode it, which
 // the CSP blocks, so the address and the mail buttons stayed broken. Static files
@@ -521,7 +518,7 @@ func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Cache-Control", "no-transform")
-		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
