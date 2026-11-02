@@ -362,6 +362,8 @@ func TestReportShowsContact(t *testing.T) {
 	require.Contains(t, body, `href="mailto:`+linetemplate.ContactEmail+`?subject=%E8%A3%9C%E5%85%85%E9%86%AB%E5%B8%AB%E5%AD%B8%E6%AD%B7"`, "the subject 補充醫師學歷, encoded")
 	require.Contains(t, body, linetemplate.ContactEmail)
 	require.Contains(t, body, "核對完就刪除")
+	// Cloudflare would otherwise hide the address behind a script the CSP blocks.
+	require.Equal(t, "no-transform", rec.Header().Get("Cache-Control"))
 }
 
 // Every group must disallow /search: a crawler obeys only the group that names it
