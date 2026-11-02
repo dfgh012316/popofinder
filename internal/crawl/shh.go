@@ -25,6 +25,12 @@ var (
 	shhParagraphRe = regexp.MustCompile(`(?s)<p>(.*?)</p>`)
 )
 
+// shhDetails are the profile's 主治專長、經歷 (OD-18).
+var shhDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)<p class="title">\s*主治專長\s*[：:]\s*</p>(.*?)(?:<p class="title">|</div>)`),
+	experience: regexp.MustCompile(`(?s)<p class="title">\s*經歷\s*[：:]\s*</p>(.*?)(?:<p class="title">|</div>)`),
+}
+
 // Shh crawls 雙和醫院 (shh.tmu.edu.tw): index → department pages → profile pages.
 type Shh struct {
 	baseURL string
@@ -143,6 +149,7 @@ func (s *Shh) Crawl(ctx context.Context) ([]Doctor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("crawl: shh doctor %s: %w", id, err)
 		}
+		specialty, experience := shhDetails.read(page)
 		doctors = append(doctors, Doctor{
 			Key:         "shh:" + id,
 			Name:        name,
@@ -150,6 +157,8 @@ func (s *Shh) Crawl(ctx context.Context) ([]Doctor, error) {
 			Hospital:    shhHospital,
 			Departments: x.depts[id],
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 	}

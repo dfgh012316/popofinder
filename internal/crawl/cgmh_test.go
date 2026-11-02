@@ -96,6 +96,7 @@ func TestCgmhCrawlFirstCampusWins(t *testing.T) {
 	require.Equal(t, "桃園", got[0].City)
 	require.Equal(t, []string{"胃腸肝膽科系"}, got[0].Departments)
 	require.Equal(t, "王小明", got[0].Name)
+	require.Equal(t, []string{"長庚紀念醫院 住院醫師"}, got[0].Experience, "OD-18")
 	require.Equal(t, srv.URL+"/tw/Services/DoctorInfo/1001", got[0].URL)
 
 	require.Equal(t, []string{"胃腸肝膽科系", "胸腔內科"}, got[1].Departments)

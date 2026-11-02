@@ -17,12 +17,14 @@ type ExistingRow struct {
 	Hospital   string         `db:"hospital"`
 	Department sql.NullString `db:"department"`
 	Education  sql.NullString `db:"education"`
+	Specialty  sql.NullString `db:"specialty"`
+	Experience sql.NullString `db:"experience"`
 	URL        sql.NullString `db:"source_url"`
 }
 
 // Row is the normalized value written for one doctor; Department "" means NULL.
 type Row struct {
-	Key, Name, City, Hospital, Department, Education, URL string
+	Key, Name, City, Hospital, Department, Education, Specialty, Experience, URL string
 }
 
 type RowUpdate struct {
@@ -64,13 +66,16 @@ func rowFromDoctor(d Doctor) Row {
 		Hospital:   truncateRunes(strings.TrimSpace(d.Hospital), 200),
 		Department: truncateRunes(strings.Join(depts, "、"), 100),
 		Education:  formatEducation(d.Education),
+		Specialty:  formatLines(d.Specialty, maxDetailRunes),
+		Experience: formatLines(d.Experience, maxDetailRunes),
 		URL:        strings.TrimSpace(d.URL),
 	}
 }
 
 func sameRow(e ExistingRow, r Row) bool {
 	return e.Name == r.Name && e.City == r.City && e.Hospital == r.Hospital &&
-		e.Department.String == r.Department && e.Education.String == r.Education && e.URL.String == r.URL
+		e.Department.String == r.Department && e.Education.String == r.Education &&
+		e.Specialty.String == r.Specialty && e.Experience.String == r.Experience && e.URL.String == r.URL
 }
 
 // BuildSyncPlan compares one source's crawl with the rows it wrote before

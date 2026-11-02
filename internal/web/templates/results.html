@@ -19,11 +19,14 @@
 </ul>
 </div>{{end}}
 {{if .Cards}}{{$l := .Labels}}<ol class="cards">
-{{range .Cards}}<li class="card">
+{{range .Cards}}{{$c := .}}<li class="card">
 <h2>{{.Name}}</h2>
 {{with .Hospital}}<p class="hosp">{{.}}</p>{{end}}
 {{if or .Department .City}}<p class="where">{{with .Department}}<span>{{.}}</span>{{end}}{{with .City}}<span>{{.}}</span>{{end}}</p>{{end}}
 <div class="edu"><h3>{{$l.Education}}</h3><ul>{{range .Education}}<li>{{.}}</li>{{end}}</ul></div>
+{{with .Specialty}}<div class="detail"><h3>{{$l.Specialty}}</h3><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+{{with .Experience}}<div class="detail"><h3>{{$l.Experience}}</h3><ul>{{range $c.ExperienceHead}}<li>{{.}}</li>{{end}}</ul>
+{{with $c.ExperienceRest}}<details><summary>其他 {{len .}} 項</summary><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></details>{{end}}</div>{{end}}
 <p class="src">{{.SourceNote}}</p>
 {{if or .SourceURL .SameDepartmentText}}<div class="acts">
 {{with .SourceURL}}<a href="{{.}}" target="_blank" rel="noopener noreferrer nofollow">{{$l.SourceLink}}</a>{{end}}

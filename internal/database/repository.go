@@ -10,7 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const selectColumns = "id, city, hospital, department, name, education, source, verification_status, source_url, source_checked_at"
+const selectColumns = "id, city, hospital, department, name, education, specialty, experience, source, verification_status, source_url, source_checked_at"
 
 // Columns compared with 臺 read as 台: ParseCriteria already turned 臺 into 台 in the
 // search term, and stored data spells it both ways (docs/open-decisions.md OD-13).
@@ -32,6 +32,8 @@ type MedicalPersonnel struct {
 	Department         sql.NullString `db:"department"`
 	Name               string         `db:"name"`
 	Education          sql.NullString `db:"education"`
+	Specialty          sql.NullString `db:"specialty"`  // 官網的專長, OD-18
+	Experience         sql.NullString `db:"experience"` // 官網的經歷, OD-18
 	Source             sql.NullString `db:"source"`
 	VerificationStatus string         `db:"verification_status"`
 	SourceURL          sql.NullString `db:"source_url"`

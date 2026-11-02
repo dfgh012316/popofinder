@@ -3,6 +3,7 @@ package crawl
 import (
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Medical-degree rule from docs/open-decisions.md OD-10: a line counts only at
@@ -59,6 +60,25 @@ func formatEducation(lines []string) string {
 		}
 	}
 	return truncateRunes(strings.Join(kept, "；"), 500)
+}
+
+// maxDetailRunes is the column size of 專長 and 經歷 (migration 0009).
+const maxDetailRunes = 500
+
+// formatLines joins lines with 「；」 like the 學歷, dropping trailing whole lines
+// until it fits in max runes, so the last line shown is never cut off; a first
+// line longer than max is cut.
+func formatLines(lines []string, max int) string {
+	var kept []string
+	for _, line := range lines {
+		if s := strings.TrimSpace(line); s != "" {
+			kept = append(kept, s)
+		}
+	}
+	for len(kept) > 1 && utf8.RuneCountInString(strings.Join(kept, "；")) > max {
+		kept = kept[:len(kept)-1]
+	}
+	return truncateRunes(strings.Join(kept, "；"), max)
 }
 
 func truncateRunes(s string, n int) string {

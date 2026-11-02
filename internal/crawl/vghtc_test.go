@@ -70,6 +70,8 @@ func TestVghtcCrawl(t *testing.T) {
 	require.Equal(t, "臺中榮民總醫院", got[0].Hospital)
 	require.Equal(t, "台中", got[0].City)
 	require.Equal(t, srv.URL+"/register/regDocSchedule.jsp?init=init&section=CV&drno=A001", got[0].URL)
+	require.Equal(t, []string{"高血壓、心臟衰竭"}, got[0].Specialty, "OD-18")
+	require.Len(t, got[0].Experience, 2)
 	// The special clinic comes after the doctor's own departments.
 	require.Equal(t, []string{"心臟內科", "家庭醫學", "戒菸"}, got[0].Departments)
 	require.Equal(t, []string{"心臟內科", "一般內科"}, got[1].Departments)

@@ -15,6 +15,12 @@ var (
 	vghtcEducationRe = regexp.MustCompile(`(?s)<h5[^>]*>\s*學歷\s*</h5>\s*<p[^>]*>(.*?)</p>`)
 )
 
+// vghtcDetails are the profile's 主治專長、經歷 (OD-18).
+var vghtcDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)<h5[^>]*>\s*主治專長\s*</h5>\s*(?:<!--.*?-->\s*)*<p[^>]*>(.*?)</p>`),
+	experience: regexp.MustCompile(`(?s)<h5[^>]*>\s*經歷\s*</h5>\s*<p[^>]*>(.*?)</p>`),
+}
+
 // vghtcSpecialGroup is the department list's group of special clinics. Its
 // departments are crawled last, so a doctor's own department comes first and the
 // 「同院同科醫師」 button searches with it.
@@ -127,6 +133,7 @@ func (s *Vghtc) Crawl(ctx context.Context) ([]Doctor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("crawl: vghtc doctor %s: %w", id, err)
 		}
+		specialty, experience := vghtcDetails.read(page)
 		doctors = append(doctors, Doctor{
 			Key:         "vghtc:" + id,
 			Name:        name,
@@ -134,6 +141,8 @@ func (s *Vghtc) Crawl(ctx context.Context) ([]Doctor, error) {
 			Hospital:    "臺中榮民總醫院",
 			Departments: x.depts[id],
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 	}

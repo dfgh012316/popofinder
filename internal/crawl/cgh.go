@@ -21,6 +21,12 @@ var (
 	cghEducationRe  = regexp.MustCompile(`(?s)<h2 class="cgh2_title">\s*學歷\s*</h2>\s*<ul>(.*?)</ul>`)
 )
 
+// cghDetails are the profile's 醫務專長、經歷 (OD-18).
+var cghDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)<app-medicalEP>(.*?)</app-medicalEP>`),
+	experience: regexp.MustCompile(`(?s)<h2 class="cgh2_title">\s*經歷\s*</h2>\s*<ul>(.*?)</ul>`),
+}
+
 type cghCampus struct {
 	host     string // scheme://host
 	base     string // path prefix, e.g. "/ec99/rwd1320/"
@@ -240,6 +246,7 @@ func (s *Cgh) crawlCampus(ctx context.Context, c cghCampus, taken map[string]boo
 		if err != nil {
 			return nil, fmt.Errorf("crawl: cgh doctor %s: %w", id, err)
 		}
+		specialty, experience := cghDetails.read(page)
 		doctors = append(doctors, Doctor{
 			Key:         "cgh:" + id,
 			Name:        name,
@@ -247,6 +254,8 @@ func (s *Cgh) crawlCampus(ctx context.Context, c cghCampus, taken map[string]boo
 			Hospital:    c.hospital,
 			Departments: x.depts[id],
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 		taken[id] = true

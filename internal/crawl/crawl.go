@@ -20,6 +20,8 @@ type Doctor struct {
 	Hospital    string
 	Departments []string // in site order; BuildSyncPlan dedupes and joins them
 	Education   []string // one entry per line of the site's 學歷 field
+	Specialty   []string // the lines of the site's 專長 field, whatever the site calls it; nil when it has none
+	Experience  []string // the lines of the site's 經歷 field; nil when it has none
 	URL         string   // profile page
 }
 
@@ -49,6 +51,38 @@ func htmlLines(raw string) []string {
 	for _, line := range strings.Split(htmlText(lineBreakRe.ReplaceAllString(raw, "\n")), "\n") {
 		if s := strings.TrimSpace(line); s != "" {
 			lines = append(lines, s)
+		}
+	}
+	return lines
+}
+
+// detailFields are a source's patterns for the 專長 and 經歷 fields of a profile
+// page (OD-18); the first group of each is the field's HTML. A nil pattern is a
+// field the site does not have.
+type detailFields struct{ specialty, experience *regexp.Regexp }
+
+// read returns the lines of both fields; a field missing from the page is nil.
+func (f detailFields) read(page string) (specialty, experience []string) {
+	return sectionLines(f.specialty, page), sectionLines(f.experience, page)
+}
+
+// bulletRe is a list marker some sites type at the start of a line.
+var bulletRe = regexp.MustCompile(`^[•●·‧▪■◆]\s*`)
+
+// sectionLines returns the lines of re's first group in page without list
+// markers, or nil when re is nil or does not match.
+func sectionLines(re *regexp.Regexp, page string) []string {
+	if re == nil {
+		return nil
+	}
+	m := re.FindStringSubmatch(page)
+	if m == nil {
+		return nil
+	}
+	var lines []string
+	for _, l := range htmlLines(m[1]) {
+		if l = strings.TrimSpace(bulletRe.ReplaceAllString(l, "")); l != "" {
+			lines = append(lines, l)
 		}
 	}
 	return lines

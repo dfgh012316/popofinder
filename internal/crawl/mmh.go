@@ -21,6 +21,12 @@ var (
 	mmhEducationRe = regexp.MustCompile(`(?s)<h2 class="event-ch-title">主要學歷</h2>\s*<ul class="info-list">(.*?)</ul>\s*<h2 class="event-ch-title">`)
 )
 
+// mmhDetails are the profile's 主治項目或專長、主要經歷 (OD-18).
+var mmhDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)<h2 class="event-ch-title">主治項目或專長</h2>\s*(?:<!--.*?-->\s*)*<p class="w-text">(.*?)</div>`),
+	experience: regexp.MustCompile(`(?s)<h2 class="event-ch-title">主要經歷</h2>\s*<ul class="info-list">(.*?)</ul>`),
+}
+
 // Mmh crawls 馬偕紀念醫院 (www.mmh.org.tw): the 台北 doctor list → profile pages.
 // Without a session cookie the list shows only 台北 (doctors seeing patients only
 // at 淡水 are not on it).
@@ -121,6 +127,7 @@ func (s *Mmh) Crawl(ctx context.Context) ([]Doctor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("crawl: mmh doctor %s: %w", e.DID, err)
 		}
+		specialty, experience := mmhDetails.read(page)
 		var departments []string
 		if e.Dept != "" {
 			departments = []string{e.Dept}
@@ -132,6 +139,8 @@ func (s *Mmh) Crawl(ctx context.Context) ([]Doctor, error) {
 			Hospital:    mmhHospital,
 			Departments: departments,
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 	}

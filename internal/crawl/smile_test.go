@@ -79,6 +79,8 @@ func TestSmileCrawlFirstBranchWins(t *testing.T) {
 	require.Equal(t, "新北", got[0].City)
 	require.Equal(t, []string{"牙科"}, got[0].Departments)
 	require.Equal(t, srv.URL+"/doctors/dr-wang-xiao-ming", got[0].URL)
+	require.Equal(t, []string{"口腔外科專科", "人工植牙"}, got[0].Specialty, "OD-18")
+	require.Nil(t, got[0].Experience)
 
 	require.Equal(t, "金山蒔美牙醫診所", got[2].Hospital)
 	require.Equal(t, "台北", got[2].City)
