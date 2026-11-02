@@ -15,67 +15,68 @@ import (
 // hospital and department (docs/open-decisions.md OD-14), whatever the education says.
 const SameDepartmentLabel = "同院同科醫師"
 
-// SourceLinkLabel labels the row that links to where the data came from.
-const SourceLinkLabel = "來源連結"
+// SourceLinkLabel is the button that opens where the data came from.
+const SourceLinkLabel = "查看來源"
+
+// EducationLabel heads the card's 學歷 block.
+const EducationLabel = "學歷"
 
 // NoResultsText is shown when a search finds nothing.
 const NoResultsText = "找不到相關資料"
 
-// CardRow is one label and value on a doctor card.
-type CardRow struct {
-	Label, Value string
-	Wrap         bool // the LINE card wraps long values instead of cutting them off
-}
-
-// The labels of a doctor card's fields.
-const (
-	CityLabel       = "縣市"
-	HospitalLabel   = "醫院"
-	DepartmentLabel = "科別"
-	EducationLabel  = "學歷"
-	SourceLabel     = "資料來源"
-)
-
 // Card is what a doctor card shows. The LINE bubble and the web page (OD-17) both
-// render it, so the two show the same fields with the same labels.
+// render it, so the two show the same fields.
 type Card struct {
-	Name                                          string
-	City, Hospital, Department, Education, Source string
-	SourceURL                                     string // "" when there is no source link
-	SourceURLText                                 string
-	SameDepartmentText                            string // what 「同院同科醫師」 searches; "" when there is no button
+	Name                       string
+	Hospital, Department, City string   // "" when missing; the card leaves them out
+	Education                  []string // one entry per line; 「未提供」 when there is none
+	Source                     string   // where the data came from, e.g. 醫療院所官網
+	SourceURL                  string   // "" when there is no source link
+	CheckedOn                  string   // when the source page was last read, "2006-01-02"; "" without a source link
+	SameDepartmentText         string   // what 「同院同科醫師」 searches; "" when there is no button
 }
 
-// Rows is the card's fields in LINE order, labelled.
-func (c Card) Rows() []CardRow {
-	return []CardRow{
-		{Label: CityLabel, Value: c.City},
-		{Label: HospitalLabel, Value: c.Hospital, Wrap: true},
-		{Label: DepartmentLabel, Value: c.Department},
-		{Label: EducationLabel, Value: c.Education, Wrap: true},
-		{Label: SourceLabel, Value: c.Source, Wrap: true},
+// SourceNote is the card's last line: the source, and when its page was read.
+func (c Card) SourceNote() string {
+	if c.CheckedOn != "" {
+		return c.Source + "，" + c.CheckedOn + " 查到"
 	}
+	return c.Source
 }
 
 // NewCard builds the card for one doctor.
 func NewCard(p database.MedicalPersonnel) Card {
 	c := Card{
 		Name:               p.Name,
-		City:               strVal(p.City),
-		Hospital:           strVal(p.Hospital),
-		Department:         strOrDefault(p.Department),
-		Education:          strOrDefault(p.Education),
+		Hospital:           strings.TrimSpace(p.Hospital),
+		Department:         strings.TrimSpace(p.Department.String),
+		City:               strings.TrimSpace(p.City),
+		Education:          lines(p.Education.String),
 		Source:             sourceLabel(p.Source),
 		SameDepartmentText: sameDepartmentSearchText(p),
 	}
+	if len(c.Education) == 0 {
+		c.Education = []string{"未提供"}
+	}
 	if p.SourceURL.Valid && p.SourceURL.String != "" {
 		c.SourceURL = p.SourceURL.String
-		c.SourceURLText = "點此查看來源"
 		if p.SourceCheckedAt.Valid {
-			c.SourceURLText = fmt.Sprintf("點此查看來源（%s 查到）", p.SourceCheckedAt.Time.Format("2006-01-02"))
+			c.CheckedOn = p.SourceCheckedAt.Time.Format("2006-01-02")
 		}
 	}
 	return c
+}
+
+// lines splits a stored list (the crawler joins lines with 「；」, OD-10) into its
+// non-blank lines.
+func lines(s string) []string {
+	var out []string
+	for _, l := range strings.Split(s, "；") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // sameDepartmentSearchText is what the button sends: a keyword search a user could
@@ -97,20 +98,6 @@ func sameDepartmentSearchText(p database.MedicalPersonnel) string {
 	return text
 }
 
-func strOrDefault(ns sql.NullString) string {
-	if ns.Valid && ns.String != "" {
-		return ns.String
-	}
-	return "未提供"
-}
-
-func strVal(s string) string {
-	if s == "" {
-		return "未提供"
-	}
-	return s
-}
-
 func sourceLabel(ns sql.NullString) string {
 	if ns.Valid {
 		switch ns.String {
@@ -126,95 +113,69 @@ func sourceLabel(ns sql.NullString) string {
 	return "尚未分類"
 }
 
+// The LINE card's colors, the same ink and blue as the web page's light theme.
+const (
+	inkColor       = "#1B2436"
+	ink2Color      = "#3B4458"
+	mutedColor     = "#646C7E"
+	linkColor      = "#1F4BB8"
+	educationColor = "#EEF3FD"
+)
+
+// doctorBubble lays a card out as a LINE bubble: the name, the hospital, the
+// department and city, the 學歷 lines in a tinted block, then the source; the
+// buttons open the source and search the same department.
 func doctorBubble(p database.MedicalPersonnel) map[string]any {
-	row := func(label, value string, extra map[string]any) map[string]any {
-		labelNode := map[string]any{
-			"type":  "text",
-			"text":  label,
-			"size":  "sm",
-			"color": "#666666",
-			"flex":  2,
+	c := NewCard(p)
+	text := func(s string, props map[string]any) map[string]any {
+		n := map[string]any{"type": "text", "text": s, "wrap": true}
+		for k, v := range props {
+			n[k] = v
 		}
-		valueNode := map[string]any{
-			"type":  "text",
-			"text":  value,
-			"size":  "sm",
-			"color": "#4A4A4A",
-			"flex":  4,
-		}
-		for k, v := range extra {
-			valueNode[k] = v
-		}
-		box := map[string]any{
-			"type":     "box",
-			"layout":   "horizontal",
-			"contents": []any{labelNode, valueNode},
-			"spacing":  "md",
-		}
-		return box
+		return n
 	}
 
-	c := NewCard(p)
-	var bodyContents []any
-	for i, r := range c.Rows() {
-		var extra map[string]any
-		if r.Wrap {
-			extra = map[string]any{"wrap": true}
-		}
-		box := row(r.Label, r.Value, extra)
-		if i > 0 {
-			box["margin"] = "md"
-		}
-		bodyContents = append(bodyContents, box)
+	body := []any{text(c.Name, map[string]any{"size": "xl", "weight": "bold", "color": inkColor})}
+	if c.Hospital != "" {
+		body = append(body, text(c.Hospital, map[string]any{"size": "sm", "weight": "bold", "color": ink2Color, "margin": "sm"}))
 	}
-	if c.SourceURL != "" {
-		urlRow := row(SourceLinkLabel, c.SourceURLText, map[string]any{
-			"wrap":  true,
-			"color": "#0066CC",
-			"action": map[string]any{
-				"type":  "uri",
-				"label": "查看來源",
-				"uri":   c.SourceURL,
-			},
-		})
-		urlRow["margin"] = "md"
-		bodyContents = append(bodyContents, urlRow)
+	var where []string
+	for _, w := range []string{c.Department, c.City} {
+		if w != "" {
+			where = append(where, w)
+		}
 	}
+	if len(where) > 0 {
+		body = append(body, text(strings.Join(where, "　"), map[string]any{"size": "xs", "color": mutedColor}))
+	}
+	education := []any{text(EducationLabel, map[string]any{"size": "xxs", "color": mutedColor})}
+	for _, l := range c.Education {
+		education = append(education, text(l, map[string]any{"size": "sm", "weight": "bold", "color": inkColor}))
+	}
+	body = append(body,
+		map[string]any{
+			"type": "box", "layout": "vertical", "contents": education, "spacing": "xs",
+			"backgroundColor": educationColor, "cornerRadius": "md", "paddingAll": "md", "margin": "lg",
+		},
+		text(c.SourceNote(), map[string]any{"size": "xxs", "color": mutedColor, "margin": "lg"}),
+	)
 
 	bubble := map[string]any{
 		"type": "bubble",
-		"header": map[string]any{
-			"type":   "box",
-			"layout": "vertical",
-			"contents": []any{
-				map[string]any{
-					"type":   "text",
-					"text":   c.Name,
-					"size":   "xl",
-					"weight": "bold",
-					"color":  "#4A4A4A",
-				},
-			},
-			"backgroundColor": "#F0F8FF",
-		},
-		"body": map[string]any{
-			"type":            "box",
-			"layout":          "vertical",
-			"contents":        bodyContents,
-			"backgroundColor": "#FFFFFF",
-		},
+		"body": map[string]any{"type": "box", "layout": "vertical", "contents": body},
 	}
-	if text := c.SameDepartmentText; text != "" {
-		bubble["footer"] = map[string]any{
-			"type":   "box",
-			"layout": "vertical",
-			"contents": []any{map[string]any{
-				"type":   "button",
-				"style":  "link",
-				"height": "sm",
-				"action": map[string]any{"type": "message", "label": SameDepartmentLabel, "text": text},
-			}},
-		}
+	var buttons []any
+	button := func(action map[string]any) map[string]any {
+		return map[string]any{"type": "button", "style": "link", "height": "sm", "color": linkColor, "action": action}
+	}
+	if c.SourceURL != "" {
+		buttons = append(buttons, button(map[string]any{"type": "uri", "label": SourceLinkLabel, "uri": c.SourceURL}))
+	}
+	if t := c.SameDepartmentText; t != "" {
+		buttons = append(buttons, button(map[string]any{"type": "message", "label": SameDepartmentLabel, "text": t}))
+	}
+	if len(buttons) > 0 {
+		bubble["footer"] = map[string]any{"type": "box", "layout": "horizontal", "spacing": "sm", "contents": buttons}
 	}
 	return bubble
 }

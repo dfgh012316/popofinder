@@ -23,8 +23,8 @@ const (
 // point is one titled line of text.
 type point struct{ Title, Text string }
 
-// differences says how POPO Finder differs from other doctor lists. The home page,
-// its JSON-LD and llms.txt are all built from it, so they say the same thing. Only
+// differences says how POPO Finder differs from other doctor lists. /about, the home
+// page's JSON-LD and llms.txt are all built from it, so they say the same thing. Only
 // what this site does, never claims about any other site (OD-17).
 var differences = []point{
 	{"標明出處，可以自己核對", "每張卡片都寫明資料來源；來自醫院官網的附上原頁面連結與查到的日期，可以自己點回去看。"},
@@ -36,7 +36,7 @@ var differences = []point{
 	{"程式碼公開", "收錄方式可以檢視，爬蟲遵守各醫院網站的 robots.txt，不繞過驗證碼。"},
 }
 
-// faqs is shown on the home page and repeated in its FAQPage JSON-LD and llms.txt.
+// faqs is shown on /about and repeated in its FAQPage JSON-LD and llms.txt.
 var faqs = []struct{ Q, A string }{
 	{"POPO Finder 是什麼？", "查詢台灣醫師在哪裡受醫學教育的免費工具。收錄醫療院所官網與網路公開彙整的醫師學歷，台灣與國外畢業的都有，照實顯示學歷原文與資料來源。"},
 	{"POPO Finder 會告訴我某位醫師是不是「波波」嗎？", "不會。它只顯示學歷原文與資料來源，不替醫師分類，也不評價任何醫師。在台灣執業的醫師都通過了國家考試，學歷只是一項事實，怎麼看由你自己決定。"},
@@ -46,13 +46,28 @@ var faqs = []struct{ Q, A string }{
 	{"網站會記錄我查了誰嗎？", "網站程式不保存你的 IP。查詢紀錄只存查詢的文字與結果筆數，用來找出缺少的資料，不存是誰查的。"},
 }
 
-// homeJSONLD is the home page's structured data: the site as a free web application,
-// and the FAQ shown on the page.
+// homeJSONLD is the home page's structured data: the site as a free web application.
 var homeJSONLD = func() template.JS {
 	features := make([]string, len(differences))
 	for i, d := range differences {
 		features[i] = d.Title
 	}
+	return ldJSON(map[string]any{
+		"@context":            "https://schema.org",
+		"@type":               "WebApplication",
+		"name":                "POPO Finder 醫師學歷查詢",
+		"url":                 siteURL + "/",
+		"applicationCategory": "ReferenceApplication",
+		"operatingSystem":     "Web",
+		"inLanguage":          "zh-TW",
+		"description":         siteDescription,
+		"offers":              map[string]any{"@type": "Offer", "price": "0", "priceCurrency": "TWD"},
+		"featureList":         features,
+	})
+}()
+
+// aboutJSONLD is /about's structured data: the FAQ shown on the page.
+var aboutJSONLD = func() template.JS {
 	type answer struct {
 		Type string `json:"@type"`
 		Text string `json:"text"`
@@ -66,32 +81,22 @@ var homeJSONLD = func() template.JS {
 	for i, f := range faqs {
 		questions[i] = question{"Question", f.Q, answer{"Answer", f.A}}
 	}
-	data := []any{
-		map[string]any{
-			"@context":            "https://schema.org",
-			"@type":               "WebApplication",
-			"name":                "POPO Finder 醫師學歷查詢",
-			"url":                 siteURL + "/",
-			"applicationCategory": "ReferenceApplication",
-			"operatingSystem":     "Web",
-			"inLanguage":          "zh-TW",
-			"description":         siteDescription,
-			"offers":              map[string]any{"@type": "Offer", "price": "0", "priceCurrency": "TWD"},
-			"featureList":         features,
-		},
-		map[string]any{
-			"@context":   "https://schema.org",
-			"@type":      "FAQPage",
-			"mainEntity": questions,
-		},
-	}
+	return ldJSON(map[string]any{
+		"@context":   "https://schema.org",
+		"@type":      "FAQPage",
+		"mainEntity": questions,
+	})
+}()
+
+// ldJSON encodes structured data for a <script type="application/ld+json">.
+func ldJSON(v any) template.JS {
 	// json.Marshal escapes <, > and &, so the result is safe inside <script>.
-	b, err := json.Marshal(data)
+	b, err := json.Marshal(v)
 	if err != nil {
 		panic(err)
 	}
 	return template.JS(b)
-}()
+}
 
 //go:embed static
 var staticFS embed.FS

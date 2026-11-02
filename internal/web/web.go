@@ -72,7 +72,7 @@ var funcs = template.FuncMap{
 // pages holds one template set per page, each the layout plus that page's content.
 var pages = func() map[string]*template.Template {
 	m := map[string]*template.Template{}
-	for _, name := range []string{"home", "results", "hospitals", "report", "message"} {
+	for _, name := range []string{"home", "results", "hospitals", "about", "report", "message"} {
 		m[name] = template.Must(template.New(name).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
 	}
 	return m
@@ -112,6 +112,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/", h.home)
 		r.Get("/search", h.search)
 		r.Get("/hospitals", h.hospitals)
+		r.Get("/about", h.about)
 		r.Get("/report", h.report)
 		r.Get("/robots.txt", staticFile("robots.txt", "text/plain; charset=utf-8"))
 		r.Get("/sitemap.xml", staticFile("sitemap.xml", "application/xml; charset=utf-8"))
@@ -131,7 +132,7 @@ type page struct {
 	JSONLD      template.JS
 	Content     any
 
-	Nav string // the header link of this page: "hospitals", "report" or ""
+	Nav string // the header link of this page: "hospitals", "about", "report" or ""
 
 	// Set by render.
 	HeadTitle, OGImage, LineURL, RepoURL string
@@ -148,50 +149,48 @@ var examples = []example{
 	{"陳", "姓名、醫院或科別含「陳」"},
 }
 
+// home is the search box, examples and one line of what is listed; everything
+// else is on /about and /hospitals, so the page is about looking a doctor up.
 func (h *Handler) home(w http.ResponseWriter, r *http.Request) {
-	cov, hs, err := h.loadCoverage(r.Context())
+	cov, _, err := h.loadCoverage(r.Context())
 	if err != nil {
-		// The search form still works without the numbers.
+		// The search box still works without the numbers.
 		slog.Error("web home coverage", "err", err)
 	}
-	names := make([]string, len(hs))
-	for i, x := range hs {
-		names[i] = x.Hospital
-	}
 	render(w, http.StatusOK, "home", page{Canonical: siteURL + "/", JSONLD: homeJSONLD, Content: struct {
-		Coverage     string
-		Examples     []example
-		Regions      []region
-		HospitalList []string
-		Stats        *coverage
-		LineURL      string
-		Differences  []point
-		FAQs         any
-	}{linetemplate.CoverageText, examples, regions, names, cov, lineAddURL, differences, faqs}})
+		Coverage string
+		Examples []example
+		Stats    *coverage
+	}{linetemplate.CoverageText, examples, cov}})
 }
 
-type resultCard struct {
-	linetemplate.Card
-	EducationLines      []string
-	EducationLabel      string
-	SourceLabel         string
-	SameDepartmentLabel string
-	SourceLinkLabel     string
+func (h *Handler) about(w http.ResponseWriter, r *http.Request) {
+	render(w, http.StatusOK, "about", page{Title: "關於", Nav: "about", Canonical: siteURL + "/about", JSONLD: aboutJSONLD,
+		Description: "POPO Finder 收錄什麼、和其他醫師名單有什麼不同，以及常見問題。", Content: struct {
+			Coverage    string
+			Differences []point
+			FAQs        any
+			LineURL     string
+		}{linetemplate.CoverageText, differences, faqs, lineAddURL}})
 }
+
+// cardLabels are the doctor cards' fixed texts, shared with LINE.
+type cardLabels struct{ Education, SourceLink, SameDepartment string }
 
 type results struct {
-	Query       string
-	Heading     string   // the summary's first line
-	SummaryRest []string // its other lines
-	Cards       []resultCard
-	NoResult    string
-	Facets      facets
-	PrevPage    int // 0 when there is none
-	NextPage    int // 0 when there is none
-	Page        int
-	TotalPages  int
-	Capped      bool
-	CappedAt    int
+	Query      string
+	Summary    linetemplate.Summary
+	Note       string // the coverage note every summary with results ends with (OD-11)
+	Cards      []linetemplate.Card
+	Labels     cardLabels
+	NoResult   string
+	Facets     facets
+	PrevPage   int // 0 when there is none
+	NextPage   int // 0 when there is none
+	Page       int
+	TotalPages int
+	Capped     bool
+	CappedAt   int
 }
 
 // facetLink adds words to the current search.
@@ -244,54 +243,10 @@ func buildFacets(q string, criteria search.Criteria, fs []database.Facet) facets
 	return out
 }
 
-// composeQuery turns the home page's search form into one search text, written the
-// way ParseCriteria reads it; ok is false when the form sent no separate field.
-//   - The city goes first: in an @醫院 or @科別 search a later city word is read as
-//     part of the hospital or department, and in any search only the first city
-//     word is the city (a second one is a keyword every result must contain). A
-//     city typed in the box wins over the city field.
-//   - The hospital and department fields are words every result must match, so with
-//     either one the search is a keyword search: an @ search matches one column
-//     only, and 「@醫院 三總」 with 科別 心臟 would look for 心臟 in hospital names.
-//   - Otherwise an @醫院 or @科別 search keeps its mode.
-func composeQuery(v url.Values) (q string, ok bool) {
-	typed := strings.TrimSpace(v.Get("q"))
-	city := strings.TrimSpace(v.Get("city"))
-	var fields []string
-	for _, k := range []string{"hospital", "dept"} {
-		if x := strings.TrimSpace(v.Get(k)); x != "" {
-			fields = append(fields, x)
-		}
-	}
-	if city == "" && len(fields) == 0 {
-		return typed, false
-	}
-	c := search.ParseCriteria(typed)
-	if c.City != nil {
-		city = *c.City
-	}
-	mode := ""
-	if len(fields) == 0 {
-		mode = map[search.SearchType]string{search.TypeHospital: "@醫院", search.TypeDepartment: "@科別"}[c.SearchType]
-	}
-	var words []string
-	for _, w := range append([]string{city, mode, c.SearchTerm}, fields...) {
-		if w != "" {
-			words = append(words, w)
-		}
-	}
-	return strings.Join(words, " "), true
-}
-
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
-	q, composed := composeQuery(r.URL.Query())
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	if composed {
-		// One search text, so paging, facets and the log work as for a typed search.
-		http.Redirect(w, r, "/search?q="+url.QueryEscape(q), http.StatusSeeOther)
 		return
 	}
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
@@ -336,19 +291,11 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	summary := strings.Split(linetemplate.SearchSummary(criteria, stats), "\n")
-	res := results{Query: q, Heading: summary[0], SummaryRest: summary[1:], Page: pageNo,
-		TotalPages: min(stats.TotalPages, maxPages), CappedAt: maxPages * database.PageSize}
+	res := results{Query: q, Summary: linetemplate.NewSummary(criteria, stats), Note: linetemplate.CoverageNote,
+		Labels: cardLabels{linetemplate.EducationLabel, linetemplate.SourceLinkLabel, linetemplate.SameDepartmentLabel},
+		Page:   pageNo, TotalPages: min(stats.TotalPages, maxPages), CappedAt: maxPages * database.PageSize}
 	for _, person := range personnel {
-		card := linetemplate.NewCard(person)
-		res.Cards = append(res.Cards, resultCard{
-			Card:                card,
-			EducationLines:      strings.Split(card.Education, "；"),
-			EducationLabel:      linetemplate.EducationLabel,
-			SourceLabel:         linetemplate.SourceLabel,
-			SameDepartmentLabel: linetemplate.SameDepartmentLabel,
-			SourceLinkLabel:     linetemplate.SourceLinkLabel,
-		})
+		res.Cards = append(res.Cards, linetemplate.NewCard(person))
 	}
 	if stats.TotalCount > database.PageSize {
 		fs, err := h.store.SearchFacets(r.Context(), criteria)

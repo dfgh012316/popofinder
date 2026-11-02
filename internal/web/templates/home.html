@@ -1,61 +1,15 @@
 {{define "content"}}
-<section class="hero">
+<section class="home">
 <h1>查醫師在哪裡受醫學教育</h1>
-<p class="lead">{{.Coverage}}</p>
+<p class="lead">輸入醫師姓名，也可以加上醫院或科別。</p>
 <form class="lookup" action="/search" method="get" role="search">
-<div class="row main">
-<input class="field" id="q" name="q" placeholder="醫師姓名、醫院或科別" aria-label="醫師姓名、醫院或科別" maxlength="300">
+<input class="field" name="q" placeholder="醫師姓名、醫院或科別" aria-label="醫師姓名、醫院或科別" maxlength="300" required>
 <button class="go" type="submit">查詢</button>
-</div>
-<div class="more">
-<label>縣市<select class="field" name="city">
-<option value="">全部縣市</option>
-{{range .Regions}}<optgroup label="{{.Name}}">{{range .Cities}}<option>{{.}}</option>{{end}}</optgroup>
-{{end}}</select></label>
-<label>醫院<input class="field" name="hospital" list="hospital-list" placeholder="例如 三總、林口長庚" maxlength="100"></label>
-<label>科別<input class="field" name="dept" placeholder="例如 心臟、牙科" maxlength="50"></label>
-</div>
-<datalist id="hospital-list">{{range .HospitalList}}<option value="{{.}}">{{end}}</datalist>
-<p class="hint">每個條件都要符合。常見的醫院簡稱也查得到，例如三總、北榮、台大、高醫、林長、彰基、部桃。</p>
 </form>
 <div class="try"><span class="muted">試試</span>
 {{range .Examples}}<a class="chip" href="/search?q={{.Query}}" title="{{.Note}}">{{.Query}}</a>
 {{end}}</div>
-</section>
-
-{{with .Stats}}<section class="block" aria-labelledby="coverage">
-<h2 id="coverage">收錄範圍</h2>
-<p class="intro">共 <b class="num">{{comma .Total}}</b> 位醫師，其中 <b class="num">{{comma .Official}}</b> 位來自 {{.Hospitals}} 家醫療院所官網的完整名單{{with .CheckedOn}}（最近一次查到 <span class="num">{{.}}</span>）{{end}}。點縣市可查該縣市的醫師，<a href="/hospitals">各醫院的收錄情形</a>另有列表。</p>
-<p class="legend"><span><i class="k-official"></i>官網完整名單</span><span><i class="k-other"></i>網路公開彙整與其他來源</span></p>
-<div class="regions">
-{{$max := maxCity .}}{{range .Regions}}<div class="region">
-<h3>{{.Name}}<span class="num">{{comma .Total}} 位</span></h3>
-<ul class="cities">
-{{range .Cities}}<li title="{{.City}}：官網名單 {{comma .Official}} 位，其他來源 {{comma (minus .Total .Official)}} 位">
-{{if .Total}}<a href="/search?q={{.City}}">{{.City}}</a>{{else}}<span class="muted">{{.City}}</span>{{end}}
-<span class="bar" aria-hidden="true">{{if .Official}}<span class="o" style="width:{{pct .Official $max}}"></span>{{end}}{{if gt .Total .Official}}<span class="x" style="width:{{pct (minus .Total .Official) $max}}"></span>{{end}}</span>
-<span class="num">{{comma .Total}}</span>
-{{if .OfficialHospitalCnt}}<span class="sub">官網名單 {{.OfficialHospitalCnt}} 家</span>{{end}}
-</li>
-{{end}}</ul>
-</div>
-{{end}}</div>
-</section>{{end}}
-
-<section class="block" aria-labelledby="diff">
-<h2 id="diff">和其他醫師名單有什麼不同</h2>
-<ul class="points">
-{{range .Differences}}<li><b>{{.Title}}</b><span>{{.Text}}</span></li>
-{{end}}</ul>
-</section>
-
-<section class="block faq" aria-labelledby="faq">
-<h2 id="faq">常見問題</h2>
-{{range .FAQs}}<details><summary>{{.Q}}</summary><p>{{.A}}</p></details>
-{{end}}</section>
-
-<section class="block" aria-labelledby="fix">
-<h2 id="fix">醫師或院所：補充、更正與下架</h2>
-<p class="intro">想補上學歷、更正錯誤或下架資料，請看<a href="/report">寄信方式</a>。院所官網有寫醫師學歷的，任何人都可以提供網址。也可以<a href="{{.LineURL}}" rel="noopener">加入 LINE 官方帳號</a>，查詢方式相同。</p>
+{{with .Stats}}<p class="stat">已收錄 <b class="num">{{comma .Total}}</b> 位醫師，其中 <b class="num">{{comma .Official}}</b> 位來自 {{.Hospitals}} 家醫院官網的完整名單。<a href="/hospitals">看收錄範圍</a></p>{{end}}
+<p class="fine">{{.Coverage}}</p>
 </section>
 {{end}}

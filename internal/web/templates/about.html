@@ -1,0 +1,16 @@
+{{define "content"}}
+<div class="col prose">
+<h1>關於 POPO Finder</h1>
+<p>{{.Coverage}}</p>
+<h2>和其他醫師名單有什麼不同</h2>
+<ul class="points">
+{{range .Differences}}<li><b>{{.Title}}</b><span>{{.Text}}</span></li>
+{{end}}</ul>
+<h2 id="faq">常見問題</h2>
+<div class="faq">
+{{range .FAQs}}<details><summary>{{.Q}}</summary><p>{{.A}}</p></details>
+{{end}}</div>
+<h2>醫師或院所：補充、更正與下架</h2>
+<p>想補上學歷、更正錯誤或下架資料，請看<a href="/report">寄信方式</a>。院所官網有寫醫師學歷的，任何人都可以提供網址。也可以<a href="{{.LineURL}}" rel="noopener">加入 LINE 官方帳號</a>，查詢方式相同。</p>
+</div>
+{{end}}

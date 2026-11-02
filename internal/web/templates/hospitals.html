@@ -10,7 +10,7 @@
 {{range .Cities}}<div class="city-block">
 <h3>{{.City}}<span class="num">{{comma .Total}} 位</span></h3>
 <div class="bar" title="{{.City}}：官網名單 {{comma .Official}} 位，其他來源 {{comma (minus .Total .Official)}} 位" aria-hidden="true">{{if .Official}}<span class="o" style="width:{{pct .Official $max}}"></span>{{end}}{{if gt .Total .Official}}<span class="x" style="width:{{pct (minus .Total .Official) $max}}"></span>{{end}}</div>
-{{if .Hospitals}}<ul class="hosp">
+{{if .Hospitals}}<ul class="hosp-list">
 {{range .Hospitals}}<li><a href="/search?q={{.Query}}">{{.Name}}</a><span class="num">{{comma .Count}} 位{{with .CheckedOn}}，{{.}} 查到{{end}}</span></li>
 {{end}}</ul>
 {{else if .Total}}<p class="small muted">還沒有官網完整名單，資料來自網路公開彙整與其他來源。<a href="/search?q={{.City}}">查{{.City}}的醫師</a></p>
