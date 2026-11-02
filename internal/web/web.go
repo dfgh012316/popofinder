@@ -244,29 +244,43 @@ func buildFacets(q string, criteria search.Criteria, fs []database.Facet) facets
 	return out
 }
 
-// searchParams are the optional fields of the home page's search form.
-var searchParams = []string{"hospital", "dept", "city"}
-
-// composeQuery joins the search form's fields into one search text, as a user would
-// type it; ok is false when the form sent no separate field. The city field is left
-// out when the typed text already names a city: ParseCriteria takes only the first
-// city word and would read a second one as a keyword every result must contain.
-// The results heading shows which city was searched.
+// composeQuery turns the home page's search form into one search text, written the
+// way ParseCriteria reads it; ok is false when the form sent no separate field.
+//   - The city goes first: in an @醫院 or @科別 search a later city word is read as
+//     part of the hospital or department, and in any search only the first city
+//     word is the city (a second one is a keyword every result must contain). A
+//     city typed in the box wins over the city field.
+//   - The hospital and department fields are words every result must match, so with
+//     either one the search is a keyword search: an @ search matches one column
+//     only, and 「@醫院 三總」 with 科別 心臟 would look for 心臟 in hospital names.
+//   - Otherwise an @醫院 or @科別 search keeps its mode.
 func composeQuery(v url.Values) (q string, ok bool) {
 	typed := strings.TrimSpace(v.Get("q"))
-	words := []string{typed}
-	for _, k := range searchParams {
-		x := strings.TrimSpace(v.Get(k))
-		if x == "" {
-			continue
+	city := strings.TrimSpace(v.Get("city"))
+	var fields []string
+	for _, k := range []string{"hospital", "dept"} {
+		if x := strings.TrimSpace(v.Get(k)); x != "" {
+			fields = append(fields, x)
 		}
-		ok = true
-		if k == "city" && typed != "" && search.ParseCriteria(typed).City != nil {
-			continue
-		}
-		words = append(words, x)
 	}
-	return strings.TrimSpace(strings.Join(words, " ")), ok
+	if city == "" && len(fields) == 0 {
+		return typed, false
+	}
+	c := search.ParseCriteria(typed)
+	if c.City != nil {
+		city = *c.City
+	}
+	mode := ""
+	if len(fields) == 0 {
+		mode = map[search.SearchType]string{search.TypeHospital: "@醫院", search.TypeDepartment: "@科別"}[c.SearchType]
+	}
+	var words []string
+	for _, w := range append([]string{city, mode, c.SearchTerm}, fields...) {
+		if w != "" {
+			words = append(words, w)
+		}
+	}
+	return strings.Join(words, " "), true
 }
 
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {

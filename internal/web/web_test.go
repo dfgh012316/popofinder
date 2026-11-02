@@ -302,28 +302,8 @@ func TestSearchComposesFormFields(t *testing.T) {
 	loc, err := url.Parse(rec.Header().Get("Location"))
 	require.NoError(t, err)
 	require.Equal(t, "/search", loc.Path)
-	require.Equal(t, "王 中榮 心臟 台中", loc.Query().Get("q"))
+	require.Equal(t, "台中 王 中榮 心臟", loc.Query().Get("q"))
 	require.Empty(t, f.offsets, "the redirect does not search")
-
-	// Only the fields: still one search text.
-	rec = serve(t, New(f), "/search?q=&city=台中&hospital=&dept=心臟")
-	require.Equal(t, http.StatusSeeOther, rec.Code)
-	loc, _ = url.Parse(rec.Header().Get("Location"))
-	require.Equal(t, "心臟 台中", loc.Query().Get("q"))
-
-	// A city already typed is not added again: a second city word would be a keyword.
-	for _, tc := range []struct{ query, want string }{
-		{"/search?q=台北%20王&city=台北", "台北 王"},
-		{"/search?q=王%20台北市&city=台北", "王 台北市"},
-		{"/search?q=台北%20王&city=高雄", "台北 王"},
-		{"/search?q=王&city=台北&dept=心臟", "王 心臟 台北"},
-	} {
-		rec = serve(t, New(f), tc.query)
-		require.Equal(t, http.StatusSeeOther, rec.Code, tc.query)
-		loc, _ = url.Parse(rec.Header().Get("Location"))
-		require.Equal(t, tc.want, loc.Query().Get("q"), tc.query)
-		require.NotNil(t, search.ParseCriteria(tc.want).City, tc.query)
-	}
 
 	// Empty fields, as the form sends them, change nothing.
 	rec = serve(t, New(f), "/search?q=陳&city=&hospital=&dept=")
@@ -333,6 +313,41 @@ func TestSearchComposesFormFields(t *testing.T) {
 	rec = serve(t, New(f), "/search?q=&city=&hospital=&dept=")
 	require.Equal(t, http.StatusSeeOther, rec.Code)
 	require.Equal(t, "/", rec.Header().Get("Location"))
+}
+
+// The composed text must mean what the form said once ParseCriteria reads it.
+func TestComposeQueryKeepsTheFormsMeaning(t *testing.T) {
+	city := func(c string) *string { return &c }
+	for _, tc := range []struct {
+		form string
+		want string
+		is   search.Criteria
+	}{
+		{"q=王&city=台北&dept=心臟", "台北 王 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王 心臟", City: city("台北")}},
+		{"q=&city=台中&dept=心臟", "台中 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "心臟", City: city("台中")}},
+		// A city typed in the box is not added again, and wins over the field.
+		{"q=台北%20王&city=台北", "台北 王", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}},
+		{"q=王%20台北市&city=台北", "台北 王", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}},
+		{"q=台北%20王&city=高雄", "台北 王", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}},
+		// An @ search keeps its mode with only a city, the city first.
+		{"q=@醫院%20三總&city=台北", "台北 @醫院 三總", search.Criteria{SearchType: search.TypeHospital, SearchTerm: "三總", City: city("台北")}},
+		{"q=@科別%20心臟&city=台北", "台北 @科別 心臟", search.Criteria{SearchType: search.TypeDepartment, SearchTerm: "心臟", City: city("台北")}},
+		{"q=台北@醫院%20三總&city=高雄", "台北 @醫院 三總", search.Criteria{SearchType: search.TypeHospital, SearchTerm: "三總", City: city("台北")}},
+		// With a hospital or department field it becomes a keyword search.
+		{"q=@醫院%20三總&dept=心臟", "三總 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "三總 心臟"}},
+		// A first word that is a hospital alias starting with a city is kept whole.
+		{"q=台中榮總&city=台中&dept=心臟", "台中 台中榮總 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "台中榮總 心臟", City: city("台中")}},
+	} {
+		v, err := url.ParseQuery(tc.form)
+		require.NoError(t, err)
+		got, ok := composeQuery(v)
+		require.True(t, ok, tc.form)
+		require.Equal(t, tc.want, got, tc.form)
+		require.Equal(t, tc.is, search.ParseCriteria(got), tc.form)
+	}
+	got, ok := composeQuery(url.Values{"q": {"@醫院 三總"}})
+	require.False(t, ok, "no separate field: the typed text as it is")
+	require.Equal(t, "@醫院 三總", got)
 }
 
 func TestSearchOffersFacets(t *testing.T) {
