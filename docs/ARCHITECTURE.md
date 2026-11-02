@@ -14,6 +14,7 @@
 - `template.Summary`／`NewSummary`：摘要拆成縣市、`@` 欄位、詞、總數、各組筆數、本頁範圍；`Text()` 是 LINE 的文字（`SearchSummary` 輸出不變），網頁版自己排版。
 - `internal/web`：`composeQuery` 與首頁表單的 `city`、`hospital`、`dept` 欄位拿掉（`/search` 只讀 `q`）；首頁只用 `loadCoverage` 的總數。新增 `/about`（`about.html`：`CoverageText`、`differences`、`faqs`、補充與更正）；`homeJSONLD` 只剩 WebApplication，FAQPage 移到 `aboutJSONLD`（共用 `ldJSON`）；sitemap、`llms.txt` 加 `/about`。結果頁直接渲染 `template.Card`（`resultCard` 拿掉），固定文字由 `cardLabels` 帶入。
 - CSS：全部改黑體（拿掉明體 token），卡片 grid `minmax(min(100%,22rem),1fr)`（桌面兩欄）；手機在有查詢框的頁面隱藏頁首連結（頁尾有）。`/hospitals` 的醫院清單 class 改 `hosp-list`（`hosp` 給卡片的醫院名）。
+- 查不到時：`widerSearches(criteria)` 產生放寬條件的查詢連結（`results.Wider`），加寄網址的 `mailto`（`results.AddURL`）；`TestWiderSearches` 確認每個查詢經 `ParseCriteria` 解析後和標籤說的一樣。
 - 測試：`TestDoctorBubbleLayout`（缺值略過、學歷分行）、`TestSearchSummaryOfAFieldSearch`、`TestSearchCardWithMissingFields`、`TestAboutSEO`；`TestSearchComposesFormFields`、`TestComposeQueryKeepsTheFormsMeaning` 隨 `composeQuery` 拿掉。
 
 ### 2026-11-02 — 網頁版改版（查詢表單、收錄範圍、縮小範圍）

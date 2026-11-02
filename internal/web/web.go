@@ -184,6 +184,8 @@ type results struct {
 	Cards      []linetemplate.Card
 	Labels     cardLabels
 	NoResult   string
+	Wider      []facetLink // for a search with no results: the same search with one condition dropped
+	AddURL     string      // writes to the contact address to add a doctor's page
 	Facets     facets
 	PrevPage   int // 0 when there is none
 	NextPage   int // 0 when there is none
@@ -307,6 +309,8 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(personnel) == 0 {
 		res.NoResult = linetemplate.NoResultsText
+		res.Wider = widerSearches(criteria)
+		res.AddURL = mailto("補充醫師學歷")
 	}
 	if pageNo > 1 {
 		res.PrevPage = pageNo - 1
@@ -320,6 +324,50 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Content = res
 	render(w, http.StatusOK, "results", p)
+}
+
+// widerSearches offers, for a search that found nothing, the same search with one
+// condition dropped: an @醫院 or @科別 search over every column, each word on its
+// own, and no city. Each is written the way ParseCriteria reads it, the city first.
+func widerSearches(c search.Criteria) []facetLink {
+	words := strings.Fields(c.SearchTerm)
+	if len(words) == 0 {
+		return nil
+	}
+	city := ""
+	if c.City != nil {
+		city = *c.City
+	}
+	mode := map[search.SearchType]string{search.TypeHospital: "@醫院", search.TypeDepartment: "@科別"}[c.SearchType]
+	join := func(ws ...string) string {
+		var out []string
+		for _, w := range ws {
+			if w != "" {
+				out = append(out, w)
+			}
+		}
+		return strings.Join(out, " ")
+	}
+	var out []facetLink
+	seen := map[string]bool{}
+	add := func(label, q string) {
+		if !seen[q] {
+			seen[q] = true
+			out = append(out, facetLink{Label: label, Query: q})
+		}
+	}
+	if mode != "" {
+		add("姓名、醫院、科別都比對", join(city, c.SearchTerm))
+	}
+	if len(words) > 1 {
+		for _, w := range words {
+			add("只查「"+w+"」", join(city, w))
+		}
+	}
+	if city != "" {
+		add("不限縣市", join(mode, c.SearchTerm))
+	}
+	return out
 }
 
 // region groups cities as the 國發會 does; every search city is in one region.

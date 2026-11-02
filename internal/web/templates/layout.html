@@ -88,6 +88,8 @@ main{flex:1;padding:24px 0 48px}
 .lookup .field:focus-visible{outline:none}
 .lookup .go{height:52px;font-size:17px;border-radius:12px;padding:0 22px}
 .try{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;font-size:15px}
+/* On a phone the label takes its own line, so the four examples stay on one. */
+@media (max-width:479px){.try>span{flex-basis:100%}}
 .chip{flex:none;display:inline-flex;align-items:baseline;gap:6px;padding:5px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--rule);color:var(--ink);text-decoration:none;font-size:15px;line-height:1.5}
 .chip:hover{border-color:var(--blue)}
 .chip .num{color:var(--muted);font-size:13px}
@@ -131,6 +133,9 @@ main{flex:1;padding:24px 0 48px}
 .empty h2{font-size:19px;margin-bottom:8px}
 .empty ul{margin:0;padding-left:1.2em;color:var(--ink-2)}
 .empty li+li{margin-top:4px}
+.empty>p{color:var(--ink-2);margin:0 0 8px}
+.empty .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.empty .add{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--rule);font-size:15px}
 .capped{color:var(--muted);font-size:14px;margin:16px 0 0}
 
 /* About */
