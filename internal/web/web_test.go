@@ -527,6 +527,13 @@ func TestWiderSearches(t *testing.T) {
 			[]search.Criteria{{SearchType: search.TypeAll, SearchTerm: "三總", City: city("台北")}, {SearchType: search.TypeHospital, SearchTerm: "三總"}}},
 		{"三總牙科", []facetLink{{Label: "只查「三總」", Query: "三總"}, {Label: "只查「牙科」", Query: "牙科"}},
 			[]search.Criteria{{SearchType: search.TypeAll, SearchTerm: "三總"}, {SearchType: search.TypeAll, SearchTerm: "牙科"}}},
+		// From the coverage page's 「高雄 高雄長庚紀念醫院」 with a word added: without
+		// the city, the hospital word first would be read as 高雄 and 長庚紀念醫院, so
+		// 不限縣市 is left out (Codex on #65). Each word alone keeps the city first.
+		{"高雄 高雄長庚紀念醫院 王", []facetLink{{Label: "只查「高雄長庚紀念醫院」", Query: "高雄 高雄長庚紀念醫院"}, {Label: "只查「王」", Query: "高雄 王"}},
+			[]search.Criteria{{SearchType: search.TypeAll, SearchTerm: "高雄長庚紀念醫院", City: city("高雄")}, {SearchType: search.TypeAll, SearchTerm: "王", City: city("高雄")}}},
+		// An @醫院 search over every column would split 三總牙科, so it is left out.
+		{"@醫院 三總牙科", nil, nil},
 	} {
 		got := widerSearches(search.ParseCriteria(tc.q))
 		require.Equal(t, tc.want, got, tc.q)
