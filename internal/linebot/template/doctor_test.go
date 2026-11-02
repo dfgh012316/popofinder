@@ -274,7 +274,7 @@ func TestDoctorBubbleSpecialtyAndExperience(t *testing.T) {
 	}})
 	require.NoError(t, err)
 	s := string(raw)
-	for _, want := range []string{`"text":"專長"`, `"text":"經歷"`, `"text":"甲醫院 住院醫師\n乙醫院 總醫師\n丙醫院 主治醫師\n另有 2 項"`} {
+	for _, want := range []string{`"text":"專長"`, `"text":"經歷"`, `"text":"甲醫院 住院醫師\n乙醫院 總醫師\n丙醫院 主治醫師"`, `"text":"另有 2 項，按「查看來源」看全部"`} {
 		require.Contains(t, s, want)
 	}
 	require.NotContains(t, s, "丁醫院", "only the first ExperienceShown lines")
