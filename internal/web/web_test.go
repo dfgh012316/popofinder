@@ -362,10 +362,11 @@ func TestReportShowsContact(t *testing.T) {
 	require.Contains(t, body, `href="mailto:`+linetemplate.ContactEmail+`?subject=%E8%A3%9C%E5%85%85%E9%86%AB%E5%B8%AB%E5%AD%B8%E6%AD%B7"`, "the subject 補充醫師學歷, encoded")
 	require.Contains(t, body, linetemplate.ContactEmail)
 	require.Contains(t, body, "核對完就刪除")
-	// A mailto link does nothing on a computer without a mail program: the address
-	// is shown to select, and Gmail's web compose is offered.
-	require.Contains(t, body, `<p class="address">`+linetemplate.ContactEmail+`</p>`)
-	require.Contains(t, body, `href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=`+url.QueryEscape(linetemplate.ContactEmail)+`&amp;su=%E8%A3%9C%E5%85%85%E9%86%AB%E5%B8%AB%E5%AD%B8%E6%AD%B7"`)
+	// A mailto link does nothing on a computer without a mail program, so as on
+	// Slipkit there is a 「複製 Email」 button (shown by copy.js) and the address.
+	require.Contains(t, body, `<button type="button" data-copy="`+linetemplate.ContactEmail+`" aria-controls="copy-status" hidden>複製 Email</button>`)
+	require.Contains(t, body, `<p class="mail">`+linetemplate.ContactEmail+`</p>`)
+	require.Contains(t, body, `<script src="/copy.js" defer></script>`)
 	// Cloudflare would otherwise hide the address behind a script the CSP blocks.
 	require.Equal(t, "no-transform", rec.Header().Get("Cache-Control"))
 }
@@ -549,6 +550,25 @@ func TestSearchNoResultsOffersWiderSearches(t *testing.T) {
 	links := searchLinks(t, body)
 	require.Contains(t, links, searchLink{Q: "王", Text: "只查「王」"})
 	require.Contains(t, links, searchLink{Q: "心臟", Text: "只查「心臟」"})
-	require.Contains(t, body, `<a href="mailto:`+linetemplate.ContactEmail+`?subject=`)
+	require.Contains(t, body, `href="mailto:`+linetemplate.ContactEmail+`?subject=`)
+	require.Contains(t, body, `data-copy="`+linetemplate.ContactEmail+`"`)
+	require.Contains(t, body, `<script src="/copy.js" defer></script>`)
 	require.Len(t, f.offsets, 1, "the suggestions are links, not searches run for the page")
+}
+
+// copy.js is the only script, loaded only where there is a 「複製 Email」 button,
+// and the CSP allows no other.
+func TestCopyScript(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/copy.js")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "text/javascript; charset=utf-8", rec.Header().Get("Content-Type"))
+	require.Contains(t, rec.Body.String(), "navigator.clipboard.writeText")
+	require.Contains(t, rec.Header().Get("Content-Security-Policy"), "script-src 'self';")
+
+	f := &fakeStore{personnel: []database.MedicalPersonnel{doctor()}, stats: database.SearchStats{TotalCount: 1, CurrentPage: 1, TotalPages: 1}}
+	for _, target := range []string{"/", "/about", "/hospitals", "/search?q=" + url.QueryEscape("王")} {
+		body := serve(t, New(f), target).Body.String()
+		require.NotContains(t, body, "<script src=", target)
+		require.NotContains(t, body, "data-copy", target)
+	}
 }

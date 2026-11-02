@@ -24,6 +24,7 @@
 <meta name="twitter:description" content="{{.Description}}">
 <meta name="twitter:image" content="{{.OGImage}}">
 {{with .JSONLD}}<script type="application/ld+json">{{.}}</script>
+{{end}}{{if .CopyScript}}<script src="/copy.js" defer></script>
 {{end}}
 <style>
 /* A lookup tool first: one search box, and doctor cards that put the 學歷 in a
@@ -136,6 +137,8 @@ main{flex:1;padding:24px 0 48px}
 .empty>p{color:var(--ink-2);margin:0 0 8px}
 .empty .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
 .empty .add{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--rule);font-size:15px}
+.empty .add p{margin:0}
+.empty .add .actions{margin-top:10px}
 .capped{color:var(--muted);font-size:14px;margin:16px 0 0}
 
 /* About */
@@ -180,12 +183,12 @@ main{flex:1;padding:24px 0 48px}
 .report .small{margin-top:12px}
 .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
 .actions a{display:inline-flex;align-items:center;height:44px;padding:0 18px;border-radius:10px;background:var(--blue);color:var(--surface);font-weight:700;text-decoration:none}
-.actions a.quiet{background:var(--blue-tint);color:var(--ink)}
-.mail-fallback{margin-top:20px;padding:14px 16px;background:var(--surface);border:1px solid var(--rule);border-radius:12px}
-.mail-fallback>p{margin:0 0 8px;color:var(--ink-2);font-size:15px}
-.mail-fallback>p.small{margin:8px 0 0;font-size:14px}
-/* No script, so no copy button: one click selects the whole address. */
-.address{display:inline-block;font-size:18px;font-weight:700;color:var(--ink);-webkit-user-select:all;user-select:all;overflow-wrap:anywhere;padding:4px 10px;border:1px dashed var(--muted);border-radius:8px}
+.actions a.quiet,.actions button{background:var(--blue-tint);color:var(--ink)}
+.actions button{display:inline-flex;align-items:center;height:44px;padding:0 18px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
+.actions button[hidden]{display:none}
+.copy-status{margin:8px 0 0;font-size:14px;color:var(--ink)}
+.copy-status:empty{display:none}
+.mail{margin:10px 0 0;font-size:13px;color:var(--muted);-webkit-user-select:all;user-select:all;overflow-wrap:anywhere}
 .message{padding:24px 0;font-size:18px}
 
 footer{border-top:1px solid var(--rule);background:var(--surface);color:var(--muted);font-size:14px;padding:20px 0 32px}
@@ -218,3 +221,9 @@ footer a{color:var(--ink-2)}
 </div></footer>
 </body>
 </html>{{end}}
+
+{{/* 「複製 Email」 like Slipkit's: hidden until copy.js shows it, so without
+scripts there is no dead button. Pages using it set page.CopyScript. */}}
+{{define "copy-email"}}<button type="button" data-copy="{{.}}" aria-controls="copy-status" hidden>複製 Email</button>{{end}}
+{{define "copy-status"}}<p class="copy-status" id="copy-status" role="status"></p>
+<p class="mail">{{.}}</p>{{end}}

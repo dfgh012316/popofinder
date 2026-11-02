@@ -5,11 +5,8 @@
 {{end}}{{end}}<div class="actions">
 <a href="{{.AddURL}}">寄信補充學歷</a>
 <a class="quiet" href="{{.FixURL}}">寄信更正或下架</a>
+{{template "copy-email" .Email}}
 </div>
-<div class="mail-fallback">
-<p>按鈕會開啟這台裝置的郵件程式；電腦沒有設定郵件程式時，按了不會有反應。也可以複製信箱自己寄（點一下會選取整個信箱）：</p>
-<p class="address">{{.Email}}</p>
-<p class="small muted">或用 Gmail 網頁版寄：<a href="{{.GmailAddURL}}" target="_blank" rel="noopener noreferrer">補充學歷</a>、<a href="{{.GmailFixURL}}" target="_blank" rel="noopener noreferrer">更正或下架</a></p>
-</div>
+{{template "copy-status" .Email}}
 </div>
 {{end}}
