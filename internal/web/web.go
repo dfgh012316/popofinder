@@ -186,6 +186,7 @@ type results struct {
 	NoResult   string
 	Wider      []facetLink // for a search with no results: the same search with one condition dropped
 	AddURL     string      // writes to the contact address to add a doctor's page
+	Email      string      // the contact address, shown as the link text
 	Facets     facets
 	PrevPage   int // 0 when there is none
 	NextPage   int // 0 when there is none
@@ -311,6 +312,7 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		res.NoResult = linetemplate.NoResultsText
 		res.Wider = widerSearches(criteria)
 		res.AddURL = mailto("補充醫師學歷")
+		res.Email = linetemplate.ContactEmail
 	}
 	if pageNo > 1 {
 		res.PrevPage = pageNo - 1
@@ -467,10 +469,18 @@ func (h *Handler) hospitals(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Nav: "report", Canonical: siteURL + "/report",
 		Description: "醫師或院所補充學歷、更正資料或要求下架的方式。", Content: struct {
-			Paragraphs            []string
-			Email, AddURL, FixURL string
+			Paragraphs                                      []string
+			Email, AddURL, FixURL, GmailAddURL, GmailFixURL string
 		}{strings.Split(linetemplate.ReportText, "\n\n"), linetemplate.ContactEmail,
-			mailto("補充醫師學歷"), mailto("更正或下架")}})
+			mailto("補充醫師學歷"), mailto("更正或下架"), gmail("補充醫師學歷"), gmail("更正或下架")}})
+}
+
+// gmail opens Gmail's web compose to the contact address with subject filled in.
+// A mailto link does nothing on a computer with no mail program set up, and
+// without scripts there is no copy button (slipkit #71 has one), so the page also
+// shows the address to select and offers this.
+func gmail(subject string) string {
+	return "https://mail.google.com/mail/?view=cm&fs=1&to=" + url.QueryEscape(linetemplate.ContactEmail) + "&su=" + url.QueryEscape(subject)
 }
 
 // mailto is a link that writes to the contact address with subject filled in.

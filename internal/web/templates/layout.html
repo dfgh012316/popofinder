@@ -181,6 +181,11 @@ main{flex:1;padding:24px 0 48px}
 .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
 .actions a{display:inline-flex;align-items:center;height:44px;padding:0 18px;border-radius:10px;background:var(--blue);color:var(--surface);font-weight:700;text-decoration:none}
 .actions a.quiet{background:var(--blue-tint);color:var(--ink)}
+.mail-fallback{margin-top:20px;padding:14px 16px;background:var(--surface);border:1px solid var(--rule);border-radius:12px}
+.mail-fallback>p{margin:0 0 8px;color:var(--ink-2);font-size:15px}
+.mail-fallback>p.small{margin:8px 0 0;font-size:14px}
+/* No script, so no copy button: one click selects the whole address. */
+.address{display:inline-block;font-size:18px;font-weight:700;color:var(--ink);-webkit-user-select:all;user-select:all;overflow-wrap:anywhere;padding:4px 10px;border:1px dashed var(--muted);border-radius:8px}
 .message{padding:24px 0;font-size:18px}
 
 footer{border-top:1px solid var(--rule);background:var(--surface);color:var(--muted);font-size:14px;padding:20px 0 32px}
