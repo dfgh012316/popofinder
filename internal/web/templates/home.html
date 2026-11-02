@@ -6,10 +6,10 @@
 <input class="field" name="q" placeholder="醫師姓名、醫院或科別" aria-label="醫師姓名、醫院或科別" maxlength="300" required>
 <button class="go" type="submit">查詢</button>
 </form>
-<div class="try"><span class="muted">試試</span>
+<div class="try"><span class="muted">試試看</span>
 {{range .Examples}}<a class="chip" href="/search?q={{.Query}}" title="{{.Note}}">{{.Query}}</a>
 {{end}}</div>
-{{with .Stats}}<p class="stat">已收錄 <b class="num">{{comma .Total}}</b> 位醫師，其中 <b class="num">{{comma .Official}}</b> 位來自 {{.Hospitals}} 家醫院官網的完整名單。<a href="/hospitals">看收錄範圍</a></p>{{end}}
+{{with .Stats}}<p class="stat">已收錄 <b class="num">{{comma .Total}}</b> 位醫師，其中 <b class="num">{{.Hospitals}}</b> 家醫院有官網的完整名單。<a href="/hospitals">看有哪些醫院</a></p>{{end}}
 <p class="fine">{{.Coverage}}</p>
 </section>
 {{end}}

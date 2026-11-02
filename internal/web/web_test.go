@@ -276,7 +276,7 @@ func TestHomeShowsCoverage(t *testing.T) {
 	rec := serve(t, New(f), "/")
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
-	require.Contains(t, body, `已收錄 <b class="num">1,500</b> 位醫師，其中 <b class="num">900</b> 位來自 1 家醫院官網的完整名單。<a href="/hospitals">看收錄範圍</a>`)
+	require.Contains(t, body, `已收錄 <b class="num">1,500</b> 位醫師，其中 <b class="num">1</b> 家醫院有官網的完整名單。<a href="/hospitals">看有哪些醫院</a>`)
 	for _, gone := range []string{`class="bar"`, "<datalist", `name="city"`, "<details>"} {
 		require.NotContains(t, body, gone)
 	}
@@ -487,4 +487,39 @@ func TestStaticAssets(t *testing.T) {
 	rec = serve(t, New(&fakeStore{}), "/favicon.svg")
 	require.Equal(t, "image/svg+xml", rec.Header().Get("Content-Type"))
 	require.Contains(t, rec.Body.String(), "<svg")
+}
+
+// A search with no results offers the same search with one condition dropped,
+// each written so that ParseCriteria reads what the label says.
+func TestWiderSearches(t *testing.T) {
+	city := func(c string) *string { return &c }
+	for _, tc := range []struct {
+		q    string
+		want []facetLink
+		is   []search.Criteria
+	}{
+		{"陳", nil, nil},
+		{"台北 王 心臟", []facetLink{{Label: "只查「王」", Query: "台北 王"}, {Label: "只查「心臟」", Query: "台北 心臟"}, {Label: "不限縣市", Query: "王 心臟"}},
+			[]search.Criteria{{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}, {SearchType: search.TypeAll, SearchTerm: "心臟", City: city("台北")}, {SearchType: search.TypeAll, SearchTerm: "王 心臟"}}},
+		{"台北 @醫院 三總", []facetLink{{Label: "姓名、醫院、科別都比對", Query: "台北 三總"}, {Label: "不限縣市", Query: "@醫院 三總"}},
+			[]search.Criteria{{SearchType: search.TypeAll, SearchTerm: "三總", City: city("台北")}, {SearchType: search.TypeHospital, SearchTerm: "三總"}}},
+		{"三總牙科", []facetLink{{Label: "只查「三總」", Query: "三總"}, {Label: "只查「牙科」", Query: "牙科"}},
+			[]search.Criteria{{SearchType: search.TypeAll, SearchTerm: "三總"}, {SearchType: search.TypeAll, SearchTerm: "牙科"}}},
+	} {
+		got := widerSearches(search.ParseCriteria(tc.q))
+		require.Equal(t, tc.want, got, tc.q)
+		for i, w := range got {
+			require.Equal(t, tc.is[i], search.ParseCriteria(w.Query), w.Query)
+		}
+	}
+}
+
+func TestSearchNoResultsOffersWiderSearches(t *testing.T) {
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	body := serve(t, New(f), "/search?q="+url.QueryEscape("王 心臟")).Body.String()
+	links := searchLinks(t, body)
+	require.Contains(t, links, searchLink{Q: "王", Text: "只查「王」"})
+	require.Contains(t, links, searchLink{Q: "心臟", Text: "只查「心臟」"})
+	require.Contains(t, body, `<a href="mailto:`+linetemplate.ContactEmail+`?subject=`)
+	require.Len(t, f.offsets, 1, "the suggestions are links, not searches run for the page")
 }

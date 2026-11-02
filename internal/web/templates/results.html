@@ -9,14 +9,15 @@
 {{with .Facets.Cities}}<div class="facet"><span>縣市</span><div class="chips">{{range .}}<a class="chip" href="/search?q={{.Query}}">{{.Label}}<span class="num">{{comma .Count}}</span></a>{{end}}</div></div>{{end}}
 {{with .Facets.Hospitals}}<div class="facet"><span>醫院</span><div class="chips">{{range .}}<a class="chip" href="/search?q={{.Query}}">{{.Label}}<small>{{.Note}}</small><span class="num">{{comma .Count}}</span></a>{{end}}</div></div>{{end}}
 </nav>{{end}}
-{{with .NoResult}}<div class="empty">
-<h2>{{.}}</h2>
+{{if .NoResult}}<div class="empty">
+<h2>{{.NoResult}}</h2>
+{{with .Wider}}<p>放寬條件再查：</p>
+<div class="chips">{{range .}}<a class="chip" href="/search?q={{.Query}}">{{.Label}}</a>{{end}}</div>{{end}}
 <ul>
-<li>減少條件，或只用姓氏、醫院簡稱查。</li>
-<li>醫院可以用簡稱，例如三總、北榮、林長；科別打部分字即可，例如「心臟」。</li>
-<li>看看<a href="/hospitals">收錄範圍</a>：官網完整名單目前只有部分醫院，查不到也不代表什麼。</li>
-<li>醫師或院所想補上學歷，請看<a href="/report">補充方式</a>。</li>
+<li>只用姓氏、醫院簡稱查，例如三總、北榮、林長；科別打部分字即可，例如「心臟」。</li>
+<li>官網完整名單目前只有部分醫院，看看<a href="/hospitals">收錄了哪些醫院</a>。查不到也不代表什麼。</li>
 </ul>
+<p class="add">知道這位醫師在醫院官網的介紹頁、上面有寫學歷？<a href="{{.AddURL}}">寄網址給我們</a>，任何人都可以提供。</p>
 </div>{{end}}
 {{if .Cards}}{{$l := .Labels}}<ol class="cards">
 {{range .Cards}}<li class="card">
