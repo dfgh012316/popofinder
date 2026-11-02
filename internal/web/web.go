@@ -334,7 +334,9 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 
 // widerSearches offers, for a search that found nothing, the same search with one
 // condition dropped: an @醫院 or @科別 search over every column, each word on its
-// own, and no city. Each is written the way ParseCriteria reads it, the city first.
+// own, and no city. Each is written the way ParseCriteria reads it, the city first,
+// and one that ParseCriteria would read differently is left out: a word starting
+// with a city (高雄長庚紀念醫院) put first would turn into a city and a keyword.
 func widerSearches(c search.Criteria) []facetLink {
 	words := strings.Fields(c.SearchTerm)
 	if len(words) == 0 {
@@ -356,24 +358,35 @@ func widerSearches(c search.Criteria) []facetLink {
 	}
 	var out []facetLink
 	seen := map[string]bool{}
-	add := func(label, q string) {
-		if !seen[q] {
+	add := func(label, q string, want search.Criteria) {
+		if !seen[q] && sameCriteria(search.ParseCriteria(q), want) {
 			seen[q] = true
 			out = append(out, facetLink{Label: label, Query: q})
 		}
 	}
 	if mode != "" {
-		add("姓名、醫院、科別都比對", join(city, c.SearchTerm))
+		add("姓名、醫院、科別都比對", join(city, c.SearchTerm), search.Criteria{SearchType: search.TypeAll, SearchTerm: c.SearchTerm, City: c.City})
 	}
 	if len(words) > 1 {
 		for _, w := range words {
-			add("只查「"+w+"」", join(city, w))
+			add("只查「"+w+"」", join(city, w), search.Criteria{SearchType: search.TypeAll, SearchTerm: w, City: c.City})
 		}
 	}
 	if city != "" {
-		add("不限縣市", join(mode, c.SearchTerm))
+		add("不限縣市", join(mode, c.SearchTerm), search.Criteria{SearchType: c.SearchType, SearchTerm: c.SearchTerm})
 	}
 	return out
+}
+
+// sameCriteria reports whether a and b search the same way.
+func sameCriteria(a, b search.Criteria) bool {
+	city := func(c search.Criteria) string {
+		if c.City == nil {
+			return ""
+		}
+		return *c.City
+	}
+	return a.SearchType == b.SearchType && a.SearchTerm == b.SearchTerm && city(a) == city(b)
 }
 
 // region groups cities as the 國發會 does; every search city is in one region.
