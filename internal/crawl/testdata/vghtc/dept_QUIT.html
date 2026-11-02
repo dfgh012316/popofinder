@@ -1,0 +1,9 @@
+<!-- Synthetic copy of regDoctor.jsp: one div per clinic slot. -->
+<html><head><script>
+		function showDoc(docNo, section, docName, secName){
+			window.location.href = 'regDocSchedule.jsp?init=sub&section='+section+'&drno='+docNo;
+		}
+</script></head><body><table>
+									<div id="A003" class="doctor-name" onclick="showDoc('A003','QUIT','李小華','戒菸')">李小華</div>
+									<div id="A001" class="doctor-name" onclick="showDoc('A001','QUIT','王小明','戒菸')">王小明</div>
+</table></body></html>
