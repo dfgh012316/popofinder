@@ -123,14 +123,15 @@ func TestSearchRendersCardsAndLogsFirstPage(t *testing.T) {
 	require.Equal(t, []int{0}, f.offsets)
 	require.Equal(t, []logged{{criteria, 15, database.ChannelWeb}}, f.logs)
 	body := rec.Body.String()
-	summary := strings.Split(linetemplate.SearchSummary(criteria, f.stats), "\n")
-	require.Contains(t, body, "<h1>"+summary[0]+"</h1>", "the summary's first line is the heading")
-	for _, line := range summary[1:] {
-		require.Contains(t, body, "<span>"+line+"</span>")
-	}
-	require.Contains(t, body, "王&lt;b&gt;大明&lt;/b&gt;", "names are escaped")
-	require.Contains(t, body, "點此查看來源（2026-10-31 查到）")
-	require.Contains(t, body, `href="https://hospital.example/doc/1" target="_blank" rel="noopener noreferrer nofollow"`)
+	require.Contains(t, body, "<h1>「林長 心臟」</h1>")
+	require.Contains(t, body, `全台共 <b class="num">15</b> 位醫師（醫院符合 15）`)
+	require.Contains(t, body, linetemplate.CoverageNote, "every summary with results says what is listed (OD-11)")
+	require.Contains(t, body, "<h2>王&lt;b&gt;大明&lt;/b&gt;</h2>", "names are escaped")
+	require.Contains(t, body, `<p class="hosp">林口長庚紀念醫院</p>`)
+	require.Contains(t, body, `<p class="where"><span>心臟內科</span><span>桃園</span></p>`)
+	require.Contains(t, body, `<h3>學歷</h3><ul><li>某大學醫學系</li></ul>`)
+	require.Contains(t, body, "醫療院所官網，2026-10-31 查到")
+	require.Contains(t, body, `href="https://hospital.example/doc/1" target="_blank" rel="noopener noreferrer nofollow">查看來源</a>`)
 	links := searchLinks(t, body)
 	require.Contains(t, links, searchLink{Q: linetemplate.NewCard(doctor()).SameDepartmentText, Text: "同院同科醫師"})
 	require.Contains(t, links, searchLink{Q: "林長 心臟", Page: "2", Text: "下一頁 ›"})
@@ -138,6 +139,24 @@ func TestSearchRendersCardsAndLogsFirstPage(t *testing.T) {
 	// Results stay out of search engines (OD-17).
 	require.Equal(t, "noindex, nofollow", rec.Header().Get("X-Robots-Tag"))
 	require.Contains(t, body, `<meta name="robots" content="noindex, nofollow">`)
+}
+
+func TestSearchSummaryOfAFieldSearch(t *testing.T) {
+	f := &fakeStore{personnel: []database.MedicalPersonnel{doctor()}, stats: database.SearchStats{TotalCount: 1, CurrentPage: 1, TotalPages: 1}}
+	body := serve(t, New(f), "/search?q="+url.QueryEscape("台北 @醫院 三總")).Body.String()
+	require.Contains(t, body, "<h1>「三總」</h1>")
+	require.Contains(t, body, `台北共 <b class="num">1</b> 位醫師（只比對醫院）`)
+}
+
+// A card leaves out what is missing instead of writing 未提供 in every slot.
+func TestSearchCardWithMissingFields(t *testing.T) {
+	f := &fakeStore{personnel: []database.MedicalPersonnel{{Name: "李小華"}}, stats: database.SearchStats{TotalCount: 1, CurrentPage: 1, TotalPages: 1}}
+	body := serve(t, New(f), "/search?q="+url.QueryEscape("李小華")).Body.String()
+	require.Contains(t, body, `<h3>學歷</h3><ul><li>未提供</li></ul>`)
+	require.Contains(t, body, `<p class="src">尚未分類</p>`)
+	for _, absent := range []string{`class="hosp"`, `class="where"`, `class="acts"`} {
+		require.NotContains(t, body, absent)
+	}
 }
 
 func TestSearchLaterPagesAreNotLogged(t *testing.T) {
@@ -247,6 +266,8 @@ func TestHospitalsLinksSearch(t *testing.T) {
 	require.Contains(t, body, linetemplate.HospitalListNote)
 }
 
+// The home page is the search box with one line of what is listed; the per-city
+// numbers are on /hospitals.
 func TestHomeShowsCoverage(t *testing.T) {
 	f := &fakeStore{
 		cities:    []database.CityCount{{City: "台北", Total: 1200, Official: 900}, {City: "高雄", Total: 300}},
@@ -255,24 +276,17 @@ func TestHomeShowsCoverage(t *testing.T) {
 	rec := serve(t, New(f), "/")
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
-	require.Contains(t, body, "共 <b class=\"num\">1,500</b> 位醫師，其中 <b class=\"num\">900</b> 位來自 1 家醫療院所官網的完整名單")
-	links := searchLinks(t, body)
-	require.Contains(t, links, searchLink{Q: "台北", Text: "台北"})
-	require.Contains(t, links, searchLink{Q: "高雄", Text: "高雄"})
-	require.NotContains(t, links, searchLink{Q: "台東", Text: "台東"}, "a city with no doctor is not a link")
-	// The bars are shares of the largest city: 台北 900 + 300 of 1,200, 高雄 300.
-	require.Contains(t, body, `<span class="o" style="width:75.00%"></span><span class="x" style="width:25.00%"></span>`)
-	require.Contains(t, body, `<span class="x" style="width:25.00%"></span></span>
-<span class="num">300</span>`)
-	require.Contains(t, body, "官網名單 1 家")
-	require.Contains(t, body, `<option value="馬偕紀念醫院">`, "the hospital field suggests the listed hospitals")
+	require.Contains(t, body, `已收錄 <b class="num">1,500</b> 位醫師，其中 <b class="num">900</b> 位來自 1 家醫院官網的完整名單。<a href="/hospitals">看收錄範圍</a>`)
+	for _, gone := range []string{`class="bar"`, "<datalist", `name="city"`, "<details>"} {
+		require.NotContains(t, body, gone)
+	}
 }
 
 func TestHomeWorksWithoutCoverage(t *testing.T) {
 	rec := serve(t, New(&failingCoverage{}), "/")
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), `action="/search"`)
-	require.NotContains(t, rec.Body.String(), `id="coverage"`)
+	require.NotContains(t, rec.Body.String(), `class="stat"`)
 }
 
 type failingCoverage struct{ fakeStore }
@@ -293,61 +307,6 @@ func TestRegionsCoverEveryCity(t *testing.T) {
 		}
 	}
 	require.Len(t, seen, 17)
-}
-
-func TestSearchComposesFormFields(t *testing.T) {
-	f := &fakeStore{}
-	rec := serve(t, New(f), "/search?q=王&city=台中&hospital=中榮&dept=心臟")
-	require.Equal(t, http.StatusSeeOther, rec.Code)
-	loc, err := url.Parse(rec.Header().Get("Location"))
-	require.NoError(t, err)
-	require.Equal(t, "/search", loc.Path)
-	require.Equal(t, "台中 王 中榮 心臟", loc.Query().Get("q"))
-	require.Empty(t, f.offsets, "the redirect does not search")
-
-	// Empty fields, as the form sends them, change nothing.
-	rec = serve(t, New(f), "/search?q=陳&city=&hospital=&dept=")
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Len(t, f.offsets, 1)
-
-	rec = serve(t, New(f), "/search?q=&city=&hospital=&dept=")
-	require.Equal(t, http.StatusSeeOther, rec.Code)
-	require.Equal(t, "/", rec.Header().Get("Location"))
-}
-
-// The composed text must mean what the form said once ParseCriteria reads it.
-func TestComposeQueryKeepsTheFormsMeaning(t *testing.T) {
-	city := func(c string) *string { return &c }
-	for _, tc := range []struct {
-		form string
-		want string
-		is   search.Criteria
-	}{
-		{"q=王&city=台北&dept=心臟", "台北 王 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王 心臟", City: city("台北")}},
-		{"q=&city=台中&dept=心臟", "台中 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "心臟", City: city("台中")}},
-		// A city typed in the box is not added again, and wins over the field.
-		{"q=台北%20王&city=台北", "台北 王", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}},
-		{"q=王%20台北市&city=台北", "台北 王", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}},
-		{"q=台北%20王&city=高雄", "台北 王", search.Criteria{SearchType: search.TypeAll, SearchTerm: "王", City: city("台北")}},
-		// An @ search keeps its mode with only a city, the city first.
-		{"q=@醫院%20三總&city=台北", "台北 @醫院 三總", search.Criteria{SearchType: search.TypeHospital, SearchTerm: "三總", City: city("台北")}},
-		{"q=@科別%20心臟&city=台北", "台北 @科別 心臟", search.Criteria{SearchType: search.TypeDepartment, SearchTerm: "心臟", City: city("台北")}},
-		{"q=台北@醫院%20三總&city=高雄", "台北 @醫院 三總", search.Criteria{SearchType: search.TypeHospital, SearchTerm: "三總", City: city("台北")}},
-		// With a hospital or department field it becomes a keyword search.
-		{"q=@醫院%20三總&dept=心臟", "三總 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "三總 心臟"}},
-		// A first word that is a hospital alias starting with a city is kept whole.
-		{"q=台中榮總&city=台中&dept=心臟", "台中 台中榮總 心臟", search.Criteria{SearchType: search.TypeAll, SearchTerm: "台中榮總 心臟", City: city("台中")}},
-	} {
-		v, err := url.ParseQuery(tc.form)
-		require.NoError(t, err)
-		got, ok := composeQuery(v)
-		require.True(t, ok, tc.form)
-		require.Equal(t, tc.want, got, tc.form)
-		require.Equal(t, tc.is, search.ParseCriteria(got), tc.form)
-	}
-	got, ok := composeQuery(url.Values{"q": {"@醫院 三總"}})
-	require.False(t, ok, "no separate field: the typed text as it is")
-	require.Equal(t, "@醫院 三總", got)
 }
 
 func TestSearchOffersFacets(t *testing.T) {
@@ -428,41 +387,60 @@ func TestRobotsEveryGroupDisallowsSearch(t *testing.T) {
 	require.Contains(t, body, "Sitemap: "+siteURL+"/sitemap.xml")
 }
 
+// ldJSONOf decodes the page's JSON-LD.
+func ldJSONOf(t *testing.T, body string, v any) {
+	t.Helper()
+	_, rest, ok := strings.Cut(body, `<script type="application/ld+json">`)
+	require.True(t, ok)
+	raw, _, ok := strings.Cut(rest, "</script>")
+	require.True(t, ok)
+	require.NoError(t, json.Unmarshal([]byte(raw), v))
+}
+
 func TestHomeSEO(t *testing.T) {
 	body := serve(t, New(&fakeStore{}), "/").Body.String()
 	require.Contains(t, body, `<link rel="canonical" href="`+siteURL+`/">`)
 	require.Contains(t, body, `<meta property="og:image" content="`+siteURL+`/og.png">`)
 	require.Contains(t, body, `<meta name="description" content="`+siteDescription+`">`)
 	require.Contains(t, body, `<link rel="icon" href="/favicon.svg"`)
+
+	var ld struct {
+		Type        string   `json:"@type"`
+		FeatureList []string `json:"featureList"`
+	}
+	ldJSONOf(t, body, &ld)
+	require.Equal(t, "WebApplication", ld.Type)
+	require.Len(t, ld.FeatureList, len(differences))
+}
+
+// /about has what the home page used to: the differences and the FAQ, with the
+// FAQPage JSON-LD where the questions are visible.
+func TestAboutSEO(t *testing.T) {
+	rec := serve(t, New(&fakeStore{}), "/about")
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	require.Contains(t, body, `<link rel="canonical" href="`+siteURL+`/about">`)
+	require.Contains(t, body, `<a href="/about" aria-current="page">`)
+	require.Contains(t, body, linetemplate.CoverageText)
 	for _, d := range differences {
 		require.Contains(t, body, d.Title)
 	}
-
-	// The JSON-LD is valid and says what the page shows.
-	_, rest, ok := strings.Cut(body, `<script type="application/ld+json">`)
-	require.True(t, ok)
-	raw, _, ok := strings.Cut(rest, "</script>")
-	require.True(t, ok)
-	var ld []struct {
-		Type        string   `json:"@type"`
-		FeatureList []string `json:"featureList"`
-		MainEntity  []struct {
+	var ld struct {
+		Type       string `json:"@type"`
+		MainEntity []struct {
 			Name   string `json:"name"`
 			Answer struct {
 				Text string `json:"text"`
 			} `json:"acceptedAnswer"`
 		} `json:"mainEntity"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(raw), &ld))
-	require.Len(t, ld, 2)
-	require.Equal(t, "WebApplication", ld[0].Type)
-	require.Len(t, ld[0].FeatureList, len(differences))
-	require.Equal(t, "FAQPage", ld[1].Type)
-	require.Len(t, ld[1].MainEntity, len(faqs))
+	ldJSONOf(t, body, &ld)
+	require.Equal(t, "FAQPage", ld.Type)
+	require.Len(t, ld.MainEntity, len(faqs))
 	for i, f := range faqs {
-		require.Equal(t, f.Q, ld[1].MainEntity[i].Name)
-		require.Equal(t, f.A, ld[1].MainEntity[i].Answer.Text)
-		require.Contains(t, body, f.Q, "the FAQ is visible on the page too")
+		require.Equal(t, f.Q, ld.MainEntity[i].Name)
+		require.Equal(t, f.A, ld.MainEntity[i].Answer.Text)
+		require.Contains(t, body, html.EscapeString(f.Q), "the FAQ is visible on the page too")
 	}
 }
 
@@ -493,7 +471,7 @@ func TestSitemapListsOnlyIndexablePages(t *testing.T) {
 	rec := serve(t, New(&fakeStore{}), "/sitemap.xml")
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
-	for _, p := range []string{"/", "/hospitals", "/report"} {
+	for _, p := range []string{"/", "/hospitals", "/about", "/report"} {
 		require.Contains(t, body, "<loc>"+siteURL+p+"</loc>")
 	}
 	require.NotContains(t, body, "<loc>"+siteURL+"/search")

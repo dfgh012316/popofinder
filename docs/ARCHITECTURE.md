@@ -2,6 +2,14 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-03 — 網頁版第二次改版、LINE 卡片改版
+- `template.Card` 改為顯示用的欄位：`Hospital`、`Department`、`City` 缺值時為 `""`（版面略過，不再寫「未提供」）、`Education []string`（依「；」分行，`lines`）、`Source`、`SourceURL`、`CheckedOn`，加 `SourceNote()`（「醫療院所官網，2026-10-31 查到」）。`Rows()`、`CardRow`、`SourceURLText` 與 `CityLabel`…`SourceLabel` 拿掉；`EducationLabel`、`SourceLinkLabel`（「查看來源」）、`SameDepartmentLabel` 保留。
+- LINE bubble（`doctorBubble`）不再是標籤／值的表格：body 是姓名、醫院、科別與縣市、淡藍底的學歷 box、來源一行；footer 是橫排的「查看來源」（uri）與「同院同科醫師」（message）link 按鈕，兩個都沒有時不放 footer。顏色常數和網頁淺色模式一致。
+- `template.Summary`／`NewSummary`：摘要拆成縣市、`@` 欄位、詞、總數、各組筆數、本頁範圍；`Text()` 是 LINE 的文字（`SearchSummary` 輸出不變），網頁版自己排版。
+- `internal/web`：`composeQuery` 與首頁表單的 `city`、`hospital`、`dept` 欄位拿掉（`/search` 只讀 `q`）；首頁只用 `loadCoverage` 的總數。新增 `/about`（`about.html`：`CoverageText`、`differences`、`faqs`、補充與更正）；`homeJSONLD` 只剩 WebApplication，FAQPage 移到 `aboutJSONLD`（共用 `ldJSON`）；sitemap、`llms.txt` 加 `/about`。結果頁直接渲染 `template.Card`（`resultCard` 拿掉），固定文字由 `cardLabels` 帶入。
+- CSS：全部改黑體（拿掉明體 token），卡片 grid `minmax(min(100%,22rem),1fr)`（桌面兩欄）；手機在有查詢框的頁面隱藏頁首連結（頁尾有）。`/hospitals` 的醫院清單 class 改 `hosp-list`（`hosp` 給卡片的醫院名）。
+- 測試：`TestDoctorBubbleLayout`（缺值略過、學歷分行）、`TestSearchSummaryOfAFieldSearch`、`TestSearchCardWithMissingFields`、`TestAboutSEO`；`TestSearchComposesFormFields`、`TestComposeQueryKeepsTheFormsMeaning` 隨 `composeQuery` 拿掉。
+
 ### 2026-11-02 — 網頁版改版（查詢表單、收錄範圍、縮小範圍）
 - `database.searchFilter(criteria)`：從 `Search` 抽出的 WHERE、參數與 `TypeAll` 排名運算式；`Search` 與新的 `SearchFacets`（依 `city, hospital` 計數）共用。新的 `CityCounts`（各縣市總數與官網名單人數，略過空縣市）；`DirectoryHospital` 加 `CheckedAt`（`MAX(source_checked_at)`，LINE 醫院清單不用）。
 - `template.Card` 改為具名欄位（`City`、`Hospital`、`Department`、`Education`、`Source`）＋`Rows()`（LINE bubble 用，輸出不變）；標籤常數 `CityLabel`…`SourceLabel`。

@@ -26,19 +26,20 @@
 {{with .JSONLD}}<script type="application/ld+json">{{.}}</script>
 {{end}}
 <style>
-/* A reference book: 明體 headwords, entries divided by rules, one 鋼筆藍 for
-   actions and links, and a highlighter only for focus and "you are here". */
+/* A lookup tool first: one search box, and doctor cards that put the 學歷 in a
+   tinted block, the same layout as the LINE card. One blue for actions and links;
+   the yellow marker only for focus and "you are here". */
 :root{
-  --paper:#f8f9fb;--surface:#fff;--ink:#18233a;--ink-2:#3d4759;--muted:#5d6678;
-  --rule:#dde2ea;--blue:#2345a0;--blue-tint:#e9eefa;--marker:#ffe36a;
+  --paper:#f5f7fa;--surface:#fff;--ink:#1b2436;--ink-2:#3b4458;--muted:#646c7e;
+  --rule:#e2e6ed;--blue:#1f4bb8;--blue-tint:#eef3fd;--marker:#ffe066;
   --bar-official:#256abf;--bar-other:#86b6ef;
-  --serif:"Noto Serif TC","Source Han Serif TC","Source Han Serif","Songti TC","PMingLiU",serif;
+  --shadow:0 1px 2px rgba(27,36,54,.06),0 10px 28px rgba(27,36,54,.07);
   --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme:dark){:root{
-  --paper:#11161f;--surface:#171e2a;--ink:#e7ebf2;--ink-2:#c4cbd7;--muted:#9aa3b5;
-  --rule:#2b3446;--blue:#9db6ff;--blue-tint:#1d2840;--marker:#d8b73a;
-  --bar-official:#86b6ef;--bar-other:#3a5a9e;
+  --paper:#10151d;--surface:#171d28;--ink:#e8ecf3;--ink-2:#c3cad6;--muted:#9aa3b4;
+  --rule:#2a3343;--blue:#a8c0ff;--blue-tint:#1c2840;--marker:#d8b73a;
+  --bar-official:#86b6ef;--bar-other:#3a5a9e;--shadow:none;
 }}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -46,7 +47,7 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var
 a{color:var(--blue);text-underline-offset:.18em}
 a:hover{text-decoration-thickness:2px}
 :focus-visible{outline:3px solid var(--marker);outline-offset:2px;border-radius:4px}
-h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.35;margin:0}
+h1,h2,h3{font-weight:800;line-height:1.35;margin:0}
 p{margin:0 0 12px}
 .wrap{max-width:68rem;margin:0 auto;padding:0 16px}
 .skip{position:absolute;left:-999px}
@@ -56,129 +57,107 @@ p{margin:0 0 12px}
 
 /* Header */
 .top{background:var(--surface);border-bottom:1px solid var(--rule)}
-.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding-top:12px;padding-bottom:12px}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding-top:10px;padding-bottom:10px}
 .brand{display:flex;align-items:baseline;gap:8px;color:var(--ink);text-decoration:none;margin-right:auto}
-.brand b{font-family:var(--serif);font-size:21px}
-.brand span{font-size:14px;color:var(--muted)}
-.top nav{display:flex;gap:4px 16px;flex-wrap:wrap;font-size:15px}
+.brand b{font-size:19px;font-weight:800;letter-spacing:.01em}
+.brand span{font-size:13px;color:var(--muted)}
+.top nav{display:flex;gap:4px 16px;flex-wrap:wrap;font-size:14px}
 .top nav a{color:var(--ink-2);text-decoration:none;padding:4px 0}
 .top nav a[aria-current]{box-shadow:inset 0 -3px 0 var(--marker);color:var(--ink)}
 .top form{flex:1 1 100%;display:flex;gap:8px}
-@media (min-width:860px){.top form{flex:0 1 26rem;order:0}.brand{margin-right:0}.top nav{margin-left:auto}}
+@media (min-width:860px){.top form{flex:0 1 28rem}.brand{margin-right:0}.top nav{margin-left:auto}}
+/* On a phone a search page keeps the box and the results; the links are in the footer. */
+@media (max-width:639px){.top.has-search nav{display:none}}
 
 /* Search controls */
-input,select,button{font:inherit;color:inherit}
+input,button{font:inherit;color:inherit}
 .field{flex:1;min-width:0;height:44px;padding:0 12px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
 .field::placeholder{color:var(--muted)}
 .go{height:44px;padding:0 20px;border:0;border-radius:10px;background:var(--blue);color:var(--surface);font-weight:700;cursor:pointer;white-space:nowrap}
 
-main{flex:1;padding:28px 0 48px}
+main{flex:1;padding:24px 0 48px}
 .col{max-width:46rem}
 
-/* Home */
-.hero{padding:16px 0 32px;border-bottom:1px solid var(--rule)}
-.hero h1{font-size:clamp(28px,6vw,40px);letter-spacing:.02em;margin-bottom:12px}
-.hero .lead{color:var(--ink-2);max-width:40rem;font-size:17px}
-.lookup{margin-top:20px;max-width:46rem;background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px}
-.lookup .row{display:flex;gap:8px}
-.lookup .main .field{height:52px;font-size:18px;border-color:var(--ink-2)}
-.lookup .main .go{height:52px;font-size:17px}
-.lookup .more{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:10px;margin-top:12px}
-.lookup label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
-.lookup label .field{flex:none;height:42px;font-size:16px;color:var(--ink)}
-.lookup .hint{font-size:14px;color:var(--muted);margin:10px 0 0}
-.try{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px;font-size:15px}
-.chip{display:inline-flex;align-items:baseline;gap:6px;padding:5px 12px;border-radius:999px;background:var(--blue-tint);color:var(--ink);text-decoration:none;font-size:15px;line-height:1.5}
-.chip:hover{box-shadow:inset 0 0 0 1px var(--blue)}
+/* Home: the search box is the page. */
+.home{max-width:40rem;margin:0 auto;padding-top:clamp(16px,9vh,96px);text-align:center}
+.home h1{font-size:clamp(28px,6.4vw,42px);letter-spacing:.01em}
+.home .lead{color:var(--ink-2);font-size:17px;margin:10px 0 0}
+.lookup{display:flex;gap:6px;margin:24px 0 16px;padding:6px;background:var(--surface);border:1px solid var(--rule);border-radius:16px;box-shadow:var(--shadow)}
+.lookup:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-tint),var(--shadow)}
+.lookup .field{border:0;height:52px;font-size:18px;background:transparent}
+.lookup .field:focus-visible{outline:none}
+.lookup .go{height:52px;font-size:17px;border-radius:12px;padding:0 22px}
+.try{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;font-size:15px}
+.chip{flex:none;display:inline-flex;align-items:baseline;gap:6px;padding:5px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--rule);color:var(--ink);text-decoration:none;font-size:15px;line-height:1.5}
+.chip:hover{border-color:var(--blue)}
 .chip .num{color:var(--muted);font-size:13px}
 .chip small{color:var(--muted);font-size:12px}
+.stat{margin:40px 0 6px;color:var(--ink-2);font-size:15px}
+.fine{color:var(--muted);font-size:13px;max-width:34rem;margin:0 auto}
 
-section.block{padding:32px 0;border-bottom:1px solid var(--rule)}
-section.block:last-of-type{border-bottom:0}
-section.block>h2{font-size:24px;margin-bottom:10px}
-.block .intro{color:var(--ink-2);max-width:44rem}
+/* Results */
+.rhead h1{font-size:clamp(22px,4.6vw,28px);overflow-wrap:anywhere}
+.rmeta{color:var(--ink-2);margin:4px 0 0}
+.note{font-size:13px;color:var(--muted);margin:2px 0 0}
+.narrow{display:grid;gap:8px;margin:16px 0 0}
+.facet{display:flex;align-items:center;gap:10px;min-width:0}
+.facet>span{flex:none;font-size:13px;color:var(--muted)}
+.facet .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px}
+@media (min-width:860px){.facet .chips{flex-wrap:wrap;overflow:visible}}
+.cards{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr))}
+.card{display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:18px 18px 8px}
+.card h2{font-size:21px;letter-spacing:.03em;overflow-wrap:anywhere}
+.card .hosp{font-weight:700;color:var(--ink-2);margin:2px 0 0;overflow-wrap:anywhere}
+.card .where{display:flex;flex-wrap:wrap;gap:0 12px;color:var(--muted);font-size:14px;margin:0}
+.edu{margin-top:14px;background:var(--blue-tint);border-radius:10px;padding:10px 14px}
+.edu h3{font-size:12px;font-weight:500;color:var(--muted)}
+.edu ul{list-style:none;margin:0;padding:0}
+.edu li{font-weight:700;line-height:1.55;overflow-wrap:anywhere}
+.edu li+li{margin-top:4px}
+.card .src{margin:auto 0 0;padding-top:12px;font-size:13px;color:var(--muted)}
+.acts{display:flex;flex-wrap:wrap;gap:2px 4px;margin:8px -10px 0;padding-top:4px;border-top:1px solid var(--rule)}
+.acts a{display:inline-flex;align-items:center;min-height:40px;padding:0 10px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none}
+.acts a:hover{background:var(--blue-tint)}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}
+.pager a{display:inline-flex;align-items:center;height:42px;padding:0 16px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);font-weight:700;text-decoration:none}
+.empty{margin-top:16px;background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:18px 20px}
+.empty h2{font-size:19px;margin-bottom:8px}
+.empty ul{margin:0;padding-left:1.2em;color:var(--ink-2)}
+.empty li+li{margin-top:4px}
+.capped{color:var(--muted);font-size:14px;margin:16px 0 0}
 
-/* Coverage index: one row per city, the bar splits official directories from other sources. */
+/* About */
+.prose h1{margin-bottom:12px}
+.prose h2{font-size:20px;margin:32px 0 10px}
+.prose>p{color:var(--ink-2)}
+.points{list-style:none;padding:0;margin:0;display:grid;gap:14px}
+.points b{display:block}
+.points span{color:var(--ink-2);font-size:15px}
+.faq details{border-bottom:1px solid var(--rule)}
+.faq summary{cursor:pointer;padding:12px 0;font-weight:700}
+.faq details p{color:var(--ink-2);margin:0 0 14px}
+
+/* Coverage page: the bar splits official directories from other sources. */
 .legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:14px;color:var(--muted);margin:4px 0 14px}
 .legend i{display:inline-block;width:14px;height:8px;border-radius:4px;margin-right:6px;vertical-align:middle}
 .k-official{background:var(--bar-official)}
 .k-other{background:var(--bar-other)}
-.regions{display:grid;gap:20px 32px;grid-template-columns:repeat(auto-fit,minmax(14.5rem,1fr))}
-.region h3{font-size:19px;display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:4px}
-.region h3 .num{font-family:var(--sans);font-size:14px;font-weight:400;color:var(--muted)}
-.cities{list-style:none;margin:0;padding:0}
-.cities li{display:grid;grid-template-columns:3.2em 1fr 3.6em;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule)}
-.cities a{font-weight:700;text-decoration:none;color:var(--ink)}
-.cities a:hover{color:var(--blue);text-decoration:underline}
-.cities .num{text-align:right;font-size:15px}
-.cities .sub{grid-column:2 / 4;font-size:13px;color:var(--muted);margin-top:-6px}
 .bar{display:flex;gap:2px;height:8px}
 .bar span{display:block;height:8px;border-radius:4px;min-width:3px}
 .bar .o{background:var(--bar-official)}
 .bar .x{background:var(--bar-other)}
-
-.points{display:grid;gap:18px 32px;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));list-style:none;padding:0;margin:16px 0 0}
-.points b{display:block;font-family:var(--serif);font-size:17px;margin-bottom:2px}
-.points span{color:var(--ink-2);font-size:15px}
-.faq details{border-bottom:1px solid var(--rule);max-width:46rem}
-.faq summary{cursor:pointer;padding:12px 0;font-weight:700}
-.faq details p{color:var(--ink-2);margin:0 0 14px}
-
-/* Results */
-.results{display:grid;gap:20px}
-.results>*{min-width:0}
-@media (min-width:960px){
-  .results{grid-template-columns:minmax(0,46rem) 18rem;justify-content:space-between;column-gap:40px}
-  .results .head,.results .list{grid-column:1}
-  .results aside{grid-column:2;grid-row:1 / span 2;position:sticky;top:16px;align-self:start}
-}
-.head h1{font-size:clamp(24px,5vw,32px);overflow-wrap:anywhere}
-.head .meta{color:var(--ink-2);margin:8px 0 0}
-.head .meta span{display:block}
-.head .meta span:last-child{font-size:14px;color:var(--muted)}
-.head .note{font-size:14px;color:var(--muted);margin-top:4px}
-.narrow h2{font-size:17px;margin-bottom:8px}
-.narrow h3{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--muted);margin:12px 0 6px}
-.narrow .chips{display:flex;flex-wrap:wrap;gap:6px}
-@media (max-width:959px){
-  /* One swipeable row per group, so the results stay near the top. */
-  .narrow .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
-  .narrow .chip{flex:none}
-}
-.entries{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
-.entry{padding:18px 0 16px;border-bottom:1px solid var(--rule)}
-.entry h2{font-size:24px;letter-spacing:.04em}
-.entry .where{margin:2px 0 10px;color:var(--ink-2)}
-.entry .where span+span::before{content:"／";color:var(--muted);margin:0 4px}
-.entry dl{display:grid;grid-template-columns:4.5em 1fr;gap:6px 14px;margin:0}
-.entry dt{color:var(--muted);font-size:14px;padding-top:2px}
-.entry dd{margin:0;overflow-wrap:anywhere}
-.entry dd ul{margin:0;padding:0;list-style:none}
-.entry dd li+li{margin-top:2px}
-.entry .src{font-size:15px}
-.entry .xref{display:inline-block;margin-top:12px;font-weight:700;text-decoration:none}
-.entry .xref:hover{text-decoration:underline}
-.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}
-.pager a{font-weight:700}
-.empty{padding:20px 0}
-.empty h2{font-size:22px;margin-bottom:10px}
-.empty ul{padding-left:1.2em;color:var(--ink-2)}
-.capped{color:var(--muted);font-size:15px;margin-top:16px}
-
-/* Coverage page */
 .city-block{padding:14px 0;border-bottom:1px solid var(--rule)}
 .city-block h3{font-size:18px;display:flex;align-items:baseline;gap:12px}
-.city-block h3 .num{font-family:var(--sans);font-size:14px;font-weight:400;color:var(--muted)}
+.city-block h3 .num{font-size:14px;font-weight:400;color:var(--muted)}
 .city-block .bar{margin:8px 0;max-width:30rem}
-.hosp{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px 24px;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))}
-.hosp li{display:flex;justify-content:space-between;gap:12px;padding:4px 0}
-.hosp .num{color:var(--muted);font-size:14px}
+.hosp-list{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px 24px;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))}
+.hosp-list li{display:flex;justify-content:space-between;gap:12px;padding:4px 0}
+.hosp-list .num{color:var(--muted);font-size:14px}
 .thumbs{display:flex;gap:6px;margin:6px 0 4px;flex-wrap:wrap}
-.thumbs a{padding:4px 14px;border-radius:999px;background:var(--blue-tint);color:var(--ink);text-decoration:none;font-family:var(--serif);font-weight:700}
+.thumbs a{padding:4px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--rule);color:var(--ink);text-decoration:none;font-weight:700}
 .region-block{scroll-margin-top:12px;padding-top:20px}
-.region-block>h2{font-size:24px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+.region-block>h2{font-size:22px;border-bottom:2px solid var(--ink);padding-bottom:6px}
 .region-block:target>h2{box-shadow:inset 0 -6px 0 var(--marker)}
-
 .lede{margin-top:10px}
 .small{font-size:14px;margin:4px 0 0}
 .end-note{margin-top:24px}
@@ -200,7 +179,7 @@ footer a{color:var(--ink-2)}
 </head>
 <body>
 <a class="skip" href="#main">跳到主要內容</a>
-<header class="top"><div class="wrap">
+<header class="top{{if .HeaderSearch}} has-search{{end}}"><div class="wrap">
 <a class="brand" href="/"><b>POPO Finder</b><span>醫師學歷查詢</span></a>
 {{if .HeaderSearch}}<form action="/search" method="get" role="search">
 <input class="field" name="q" value="{{.Query}}" placeholder="醫師姓名、醫院或科別" aria-label="查詢醫師" maxlength="300" required>
@@ -208,6 +187,7 @@ footer a{color:var(--ink-2)}
 </form>
 {{end}}<nav aria-label="網站">
 <a href="/hospitals"{{if eq .Nav "hospitals"}} aria-current="page"{{end}}>收錄範圍</a>
+<a href="/about"{{if eq .Nav "about"}} aria-current="page"{{end}}>關於</a>
 <a href="/report"{{if eq .Nav "report"}} aria-current="page"{{end}}>補充與更正</a>
 <a href="{{.LineURL}}" rel="noopener">LINE 版</a>
 </nav>
@@ -216,7 +196,7 @@ footer a{color:var(--ink-2)}
 {{template "content" .Content}}
 </div></main>
 <footer><div class="wrap">
-<nav aria-label="頁尾"><a href="/">查詢</a><a href="/hospitals">收錄範圍</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a><a href="{{.RepoURL}}" rel="noopener">程式碼</a></nav>
+<nav aria-label="頁尾"><a href="/">查詢</a><a href="/hospitals">收錄範圍</a><a href="/about">關於與常見問題</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a><a href="{{.RepoURL}}" rel="noopener">程式碼</a></nav>
 <div>只呈現公開的學歷事實，不評價任何醫師。</div>
 </div></footer>
 </body>

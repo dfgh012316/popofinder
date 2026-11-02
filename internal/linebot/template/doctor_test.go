@@ -24,7 +24,7 @@ func TestDoctorBubbleShowsSourceAndURL(t *testing.T) {
 		t.Fatalf("DoctorsFlexMessage error: %v", err)
 	}
 	s := string(raw)
-	for _, want := range []string{"資料來源", "民眾回報", "來源連結", "https://example.com/doc"} {
+	for _, want := range []string{"民眾回報", "https://example.com/doc"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("card JSON missing %q: %s", want, s)
 		}
@@ -34,7 +34,7 @@ func TestDoctorBubbleShowsSourceAndURL(t *testing.T) {
 		t.Fatalf("card JSON should not show 驗證狀態: %s", s)
 	}
 	// SourceURL should render as a tappable uri action, not raw text.
-	for _, want := range []string{`"type":"uri"`, `"uri":"https://example.com/doc"`, "點此查看來源"} {
+	for _, want := range []string{`"type":"uri"`, `"uri":"https://example.com/doc"`, `"label":"查看來源"`} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("card JSON missing link affordance %q: %s", want, s)
 		}
@@ -52,8 +52,8 @@ func TestDoctorBubbleOmitsSourceURLWhenEmpty(t *testing.T) {
 		t.Fatalf("DoctorsFlexMessage error: %v", err)
 	}
 	s := string(raw)
-	if strings.Contains(s, "來源連結") {
-		t.Fatalf("card JSON should omit 來源連結 when SourceURL empty: %s", s)
+	if strings.Contains(s, "查看來源") || strings.Contains(s, `"type":"uri"`) {
+		t.Fatalf("card JSON should omit the source button when SourceURL empty: %s", s)
 	}
 	if !strings.Contains(s, "網路公開彙整") {
 		t.Fatalf("card JSON missing 網路公開彙整: %s", s)
@@ -76,23 +76,17 @@ func TestDoctorBubbleBlogSourceShowsDate(t *testing.T) {
 	}
 	carousel := msg["contents"].(map[string]any)
 	bubble := carousel["contents"].([]any)[0].(map[string]any)
-	rows := bubble["body"].(map[string]any)["contents"].([]any)
-
-	for _, r := range rows {
-		children := r.(map[string]any)["contents"].([]any)
-		if children[0].(map[string]any)["text"] != "資料來源" {
+	for _, n := range bubble["body"].(map[string]any)["contents"].([]any) {
+		node := n.(map[string]any)
+		if node["text"] != "網路公開彙整（2025 年 3 月前）" {
 			continue
 		}
-		value := children[1].(map[string]any)
-		if value["text"] != "網路公開彙整（2025 年 3 月前）" {
-			t.Fatalf("blog source label = %v", value["text"])
-		}
-		if value["wrap"] != true {
-			t.Fatalf("source value should wrap: %v", value)
+		if node["wrap"] != true {
+			t.Fatalf("source should wrap: %v", node)
 		}
 		return
 	}
-	t.Fatalf("card has no 資料來源 row: %s", raw)
+	t.Fatalf("card has no blog source line: %s", raw)
 }
 
 func TestDoctorBubbleShowsCheckedDate(t *testing.T) {
@@ -108,7 +102,7 @@ func TestDoctorBubbleShowsCheckedDate(t *testing.T) {
 		t.Fatalf("DoctorsFlexMessage error: %v", err)
 	}
 	s := string(raw)
-	for _, want := range []string{"醫療院所官網", "點此查看來源（2026-10-12 查到）"} {
+	for _, want := range []string{`"text":"醫療院所官網，2026-10-12 查到"`, `"label":"查看來源"`} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("card JSON missing %q: %s", want, s)
 		}
@@ -125,8 +119,8 @@ func TestDoctorBubbleShowsCheckedDate(t *testing.T) {
 		t.Fatalf("DoctorsFlexMessage error: %v", err)
 	}
 	s = string(raw)
-	if !strings.Contains(s, `"text":"點此查看來源"`) {
-		t.Fatalf("card JSON should show plain link text without a date: %s", s)
+	if !strings.Contains(s, `"text":"醫療院所官網"`) {
+		t.Fatalf("card JSON should show the source without a date: %s", s)
 	}
 	if strings.Contains(s, "查到") {
 		t.Fatalf("card JSON should not show 查到 without SourceCheckedAt: %s", s)
@@ -145,8 +139,8 @@ func TestDoctorBubbleCheckedDateNeedsURL(t *testing.T) {
 		t.Fatalf("DoctorsFlexMessage error: %v", err)
 	}
 	s := string(raw)
-	if strings.Contains(s, "來源連結") || strings.Contains(s, "查到") {
-		t.Fatalf("card JSON should not show 來源連結 or 查到 without SourceURL: %s", s)
+	if strings.Contains(s, "查看來源") || strings.Contains(s, "查到") {
+		t.Fatalf("card JSON should not show 查看來源 or 查到 without SourceURL: %s", s)
 	}
 }
 
@@ -210,7 +204,12 @@ func TestDoctorBubbleSameDepartmentButton(t *testing.T) {
 				return
 			}
 			require.NotNil(t, footer)
-			action := footer.Contents[0].Action
+			var action map[string]string
+			for _, b := range footer.Contents {
+				if b.Action["type"] == "message" {
+					action = b.Action
+				}
+			}
 			require.Equal(t, map[string]string{"type": "message", "label": "同院同科醫師", "text": tt.wantText}, action)
 
 			got := search.ParseCriteria(action["text"])
@@ -219,4 +218,49 @@ func TestDoctorBubbleSameDepartmentButton(t *testing.T) {
 			require.Equal(t, tt.wantSearch, got.SearchTerm)
 		})
 	}
+}
+
+// Missing hospital, department or city are left out rather than shown as 未提供;
+// the 學歷 block always shows, one text per stored line.
+func TestDoctorBubbleLayout(t *testing.T) {
+	raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:      "王小明",
+		Hospital:  "測試醫院",
+		Education: sql.NullString{String: "甲大學醫學系；乙大學公共衛生碩士", Valid: true},
+	}, {
+		Name: "李小華",
+	}})
+	require.NoError(t, err)
+	var msg struct {
+		Contents struct {
+			Contents []struct {
+				Body struct {
+					Contents []struct {
+						Text     string `json:"text"`
+						Contents []struct {
+							Text string `json:"text"`
+						} `json:"contents"`
+					} `json:"contents"`
+				} `json:"body"`
+			} `json:"contents"`
+		} `json:"contents"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &msg))
+	texts := func(i int) (top, education []string) {
+		for _, n := range msg.Contents.Contents[i].Body.Contents {
+			if n.Text != "" {
+				top = append(top, n.Text)
+			}
+			for _, c := range n.Contents {
+				education = append(education, c.Text)
+			}
+		}
+		return top, education
+	}
+	top, education := texts(0)
+	require.Equal(t, []string{"王小明", "測試醫院", "尚未分類"}, top)
+	require.Equal(t, []string{"學歷", "甲大學醫學系", "乙大學公共衛生碩士"}, education)
+	top, education = texts(1)
+	require.Equal(t, []string{"李小華", "尚未分類"}, top)
+	require.Equal(t, []string{"學歷", "未提供"}, education)
 }
