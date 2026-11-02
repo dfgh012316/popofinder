@@ -146,3 +146,28 @@ func TestRowFromDoctorLimits(t *testing.T) {
 	d.Departments = []string{strings.Repeat("甲", 150)}
 	require.Equal(t, 100, utf8.RuneCountInString(rowFromDoctor(d).Department))
 }
+
+// 專長 and 經歷 are part of the row (OD-18): rows stored before migration 0009
+// have NULL in both and are updated the first time a crawl reads them; a doctor
+// whose page has neither stays touched-only.
+func TestBuildSyncPlanComparesSpecialtyAndExperience(t *testing.T) {
+	withDetails := planDoctor("t:1", mdLine)
+	withDetails.Specialty = []string{"糖尿病"}
+	withDetails.Experience = []string{"甲醫院 住院醫師", "甲醫院 主治醫師"}
+	plain := planDoctor("t:2", mdLine)
+
+	plan := BuildSyncPlan([]Doctor{withDetails, plain}, []ExistingRow{planExisting(1, "t:1", mdLine), planExisting(2, "t:2", mdLine)}, nil)
+
+	require.Len(t, plan.Updates, 1)
+	require.Equal(t, 1, plan.Updates[0].ID)
+	require.Equal(t, "糖尿病", plan.Updates[0].Row.Specialty)
+	require.Equal(t, "甲醫院 住院醫師；甲醫院 主治醫師", plan.Updates[0].Row.Experience)
+	require.Equal(t, []int{2}, plan.TouchIDs)
+
+	stored := planExisting(1, "t:1", mdLine)
+	stored.Specialty = sql.NullString{String: "糖尿病", Valid: true}
+	stored.Experience = sql.NullString{String: "甲醫院 住院醫師；甲醫院 主治醫師", Valid: true}
+	plan = BuildSyncPlan([]Doctor{withDetails}, []ExistingRow{stored}, nil)
+	require.Empty(t, plan.Updates)
+	require.Equal(t, []int{1}, plan.TouchIDs)
+}

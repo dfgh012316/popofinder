@@ -15,6 +15,13 @@ var (
 	kmuhEducationRe = regexp.MustCompile(`(?s)docDetailTitle"[^>]*>\s*學歷\s*</span>\s*</div>\s*<div class="row docContent">\s*<span[^>]*>(.*?)</span>`)
 )
 
+// kmuhDetails are the profile's 專長、經歷 (OD-18). The site spaces 專　　長 with
+// full-width spaces, which \s does not match.
+var kmuhDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)docDetailTitle"[^>]*>\s*專[\s　]*長\s*</span>\s*</div>\s*<div class="row docContent">\s*<span[^>]*>(.*?)</span>`),
+	experience: regexp.MustCompile(`(?s)docDetailTitle"[^>]*>\s*經歷\s*</span>\s*</div>\s*<div class="row docContent">\s*<span[^>]*>(.*?)</span>`),
+}
+
 type kmuhHospital struct {
 	base     string // scheme://host
 	hospital string
@@ -177,6 +184,7 @@ func (s *Kmuh) crawlHospital(ctx context.Context, h kmuhHospital, taken map[stri
 		if err != nil {
 			return nil, fmt.Errorf("crawl: kmuh doctor %s: %w", id, err)
 		}
+		specialty, experience := kmuhDetails.read(page)
 		doctors = append(doctors, Doctor{
 			Key:         "kmuh:" + id,
 			Name:        name,
@@ -184,6 +192,8 @@ func (s *Kmuh) crawlHospital(ctx context.Context, h kmuhHospital, taken map[stri
 			Hospital:    h.hospital,
 			Departments: x.depts[id],
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 	}

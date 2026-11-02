@@ -19,6 +19,13 @@ var (
 	smilePostRe   = regexp.MustCompile(`醫院|院長|主任|主治|教授|講師|醫師|研究員|住院|顧問|理事|會員|現任|隊長`)
 )
 
+// smileDetails are the profile's 醫師專長 (OD-18). The bio mixes school, posts and
+// certificates in one paragraph, so there is no 經歷 to read.
+var smileDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)醫師<strong>專長</strong>(?:</p>)?\s*</h2>\s*<p[^>]*>(.*?)</p>`),
+	experience: nil,
+}
+
 type smileBranch struct {
 	slug     string // all-doctors/<slug>
 	hospital string
@@ -119,6 +126,7 @@ func (s *Smile) Crawl(ctx context.Context) ([]Doctor, error) {
 			if err != nil {
 				return nil, smileProfileError(b.slug, i, slug, err)
 			}
+			specialty, _ := smileDetails.read(profile)
 			doctors = append(doctors, Doctor{
 				Key:         "smile:" + id,
 				Name:        name,
@@ -126,6 +134,7 @@ func (s *Smile) Crawl(ctx context.Context) ([]Doctor, error) {
 				Hospital:    b.hospital,
 				Departments: []string{"牙科"},
 				Education:   education,
+				Specialty:   specialty,
 				URL:         u,
 			})
 		}

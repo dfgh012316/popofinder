@@ -259,8 +259,53 @@ func TestDoctorBubbleLayout(t *testing.T) {
 	}
 	top, education := texts(0)
 	require.Equal(t, []string{"王小明", "測試醫院", "尚未分類"}, top)
-	require.Equal(t, []string{"學歷", "甲大學醫學系", "乙大學公共衛生碩士"}, education)
+	require.Equal(t, []string{"學歷", "甲大學醫學系\n乙大學公共衛生碩士"}, education)
 	top, education = texts(1)
 	require.Equal(t, []string{"李小華", "尚未分類"}, top)
 	require.Equal(t, []string{"學歷", "未提供"}, education)
+}
+
+// 專長 and the first 經歷 lines are on the card, cut short (OD-18).
+func TestDoctorBubbleSpecialtyAndExperience(t *testing.T) {
+	raw, err := DoctorsFlexMessage([]database.MedicalPersonnel{{
+		Name:       "王小明",
+		Specialty:  sql.NullString{String: "高血壓；" + strings.Repeat("甲", 100), Valid: true},
+		Experience: sql.NullString{String: "甲醫院 住院醫師；乙醫院 總醫師；丙醫院 主治醫師；丁醫院 主任；戊學會 理事", Valid: true},
+	}})
+	require.NoError(t, err)
+	s := string(raw)
+	for _, want := range []string{`"text":"專長"`, `"text":"經歷"`, `"text":"甲醫院 住院醫師\n乙醫院 總醫師\n丙醫院 主治醫師\n另有 2 項"`} {
+		require.Contains(t, s, want)
+	}
+	require.NotContains(t, s, "丁醫院", "only the first ExperienceShown lines")
+	require.Contains(t, s, `"text":"高血壓；`+strings.Repeat("甲", lineSpecialtyRunes-5)+`…"`)
+
+	raw, err = DoctorsFlexMessage([]database.MedicalPersonnel{{Name: "李小華"}})
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "專長")
+	require.NotContains(t, string(raw), "經歷")
+}
+
+// A page of ten cards stays under LINE's limits (30 KB per bubble, 50 KB per
+// carousel) with 學歷, 專長 and 經歷 at their column size and the other fields
+// somewhat longer than the longest in production on 2026-11-03 (name 18, hospital
+// 27, department 54, source URL 116 characters).
+func TestDoctorsFlexMessageSize(t *testing.T) {
+	full := func(n int) sql.NullString { return sql.NullString{String: strings.Repeat("醫", n), Valid: true} }
+	lines := sql.NullString{String: strings.TrimSuffix(strings.Repeat(strings.Repeat("醫", 49)+"；", 10), "；"), Valid: true}
+	p := database.MedicalPersonnel{
+		Name: strings.Repeat("名", 30), City: "台北", Hospital: strings.Repeat("院", 50),
+		Department: full(100), Education: lines, Specialty: full(500), Experience: lines,
+		Source: sql.NullString{String: "hospital_directory", Valid: true}, SourceURL: sql.NullString{String: "https://example.com/" + strings.Repeat("a", 200), Valid: true},
+	}
+	ps := make([]database.MedicalPersonnel, database.PageSize)
+	for i := range ps {
+		ps[i] = p
+	}
+	raw, err := DoctorsFlexMessage(ps)
+	require.NoError(t, err)
+	require.Less(t, len(raw), 50*1024)
+	bubble, err := json.Marshal(doctorBubble(p))
+	require.NoError(t, err)
+	require.Less(t, len(bubble), 30*1024)
 }

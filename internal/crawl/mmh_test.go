@@ -88,6 +88,8 @@ func TestMmhCrawl(t *testing.T) {
 	require.Equal(t, "mmh:1003", got[2].Key)
 	// The list spells this name with a private-use character; the profile does not.
 	require.Equal(t, "王小明", got[0].Name)
+	require.Equal(t, []string{"胃鏡檢查、大腸鏡檢查"}, got[0].Specialty, "OD-18")
+	require.Equal(t, []string{"馬偕紀念醫院總醫師"}, got[0].Experience)
 	require.Equal(t, "台北", got[0].City)
 	require.Equal(t, "馬偕紀念醫院", got[0].Hospital)
 	require.Equal(t, []string{"心臟血管內科系"}, got[0].Departments)

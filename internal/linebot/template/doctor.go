@@ -18,8 +18,16 @@ const SameDepartmentLabel = "同院同科醫師"
 // SourceLinkLabel is the button that opens where the data came from.
 const SourceLinkLabel = "查看來源"
 
-// EducationLabel heads the card's 學歷 block.
-const EducationLabel = "學歷"
+// The headings of the card's 學歷, 專長 and 經歷 (OD-18).
+const (
+	EducationLabel  = "學歷"
+	SpecialtyLabel  = "專長"
+	ExperienceLabel = "經歷"
+)
+
+// ExperienceShown is how many 經歷 lines a card shows before the rest is folded
+// (web) or left out (LINE, where the message has a size limit).
+const ExperienceShown = 3
 
 // NoResultsText is shown when a search finds nothing.
 const NoResultsText = "找不到相關資料"
@@ -30,6 +38,7 @@ type Card struct {
 	Name                       string
 	Hospital, Department, City string   // "" when missing; the card leaves them out
 	Education                  []string // one entry per line; 「未提供」 when there is none
+	Specialty, Experience      []string // 專長 and 經歷 from the hospital's page, one entry per line; nil when there is none (OD-18)
 	Source                     string   // where the data came from, e.g. 醫療院所官網
 	SourceURL                  string   // "" when there is no source link
 	CheckedOn                  string   // when the source page was last read, "2006-01-02"; "" without a source link
@@ -52,6 +61,8 @@ func NewCard(p database.MedicalPersonnel) Card {
 		Department:         strings.TrimSpace(p.Department.String),
 		City:               strings.TrimSpace(p.City),
 		Education:          lines(p.Education.String),
+		Specialty:          lines(p.Specialty.String),
+		Experience:         lines(p.Experience.String),
 		Source:             sourceLabel(p.Source),
 		SameDepartmentText: sameDepartmentSearchText(p),
 	}
@@ -65,6 +76,19 @@ func NewCard(p database.MedicalPersonnel) Card {
 		}
 	}
 	return c
+}
+
+// ExperienceHead is the first ExperienceShown 經歷 lines, the ones always shown.
+func (c Card) ExperienceHead() []string {
+	return c.Experience[:min(len(c.Experience), ExperienceShown)]
+}
+
+// ExperienceRest is the 經歷 lines after ExperienceHead; nil when there are none.
+func (c Card) ExperienceRest() []string {
+	if len(c.Experience) <= ExperienceShown {
+		return nil
+	}
+	return c.Experience[ExperienceShown:]
 }
 
 // lines splits a stored list (the crawler joins lines with 「；」, OD-10) into its
@@ -122,8 +146,24 @@ const (
 	educationColor = "#EEF3FD"
 )
 
+// How much of the 專長 and of each 經歷 line a LINE card shows.
+const (
+	lineSpecialtyRunes  = 80
+	lineExperienceRunes = 40
+)
+
+// cut shortens s to n runes, ending with 「…」 when it was longer.
+func cut(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
+}
+
 // doctorBubble lays a card out as a LINE bubble: the name, the hospital, the
-// department and city, the 學歷 lines in a tinted block, then the source; the
+// department and city, the 學歷 lines in a tinted block, the 專長 and the first
+// 經歷 lines, then the source; the
 // buttons open the source and search the same department.
 func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	c := NewCard(p)
@@ -148,17 +188,38 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	if len(where) > 0 {
 		body = append(body, text(strings.Join(where, "　"), map[string]any{"size": "xs", "color": mutedColor}))
 	}
-	education := []any{text(EducationLabel, map[string]any{"size": "xxs", "color": mutedColor})}
-	for _, l := range c.Education {
-		education = append(education, text(l, map[string]any{"size": "sm", "weight": "bold", "color": inkColor}))
+	// One text per field with the lines joined by \n: a text node per line would
+	// add about 80 bytes each, and a page of cards has a size limit.
+	education := []any{
+		text(EducationLabel, map[string]any{"size": "xxs", "color": mutedColor}),
+		text(strings.Join(c.Education, "\n"), map[string]any{"size": "sm", "weight": "bold", "color": inkColor}),
 	}
-	body = append(body,
-		map[string]any{
-			"type": "box", "layout": "vertical", "contents": education, "spacing": "xs",
-			"backgroundColor": educationColor, "cornerRadius": "md", "paddingAll": "md", "margin": "lg",
-		},
-		text(c.SourceNote(), map[string]any{"size": "xxs", "color": mutedColor, "margin": "lg"}),
-	)
+	body = append(body, map[string]any{
+		"type": "box", "layout": "vertical", "contents": education, "spacing": "xs",
+		"backgroundColor": educationColor, "cornerRadius": "md", "paddingAll": "md", "margin": "lg",
+	})
+	// 專長 and 經歷 are cut short: a carousel of ten cards must stay under LINE's
+	// size limit, and 查看來源 has the whole page.
+	detail := func(label string, ls []string) {
+		if len(ls) == 0 {
+			return
+		}
+		body = append(body,
+			text(label, map[string]any{"size": "xxs", "color": mutedColor, "margin": "lg"}),
+			text(strings.Join(ls, "\n"), map[string]any{"size": "xs", "color": ink2Color}))
+	}
+	if len(c.Specialty) > 0 {
+		detail(SpecialtyLabel, []string{cut(strings.Join(c.Specialty, "；"), lineSpecialtyRunes)})
+	}
+	var experience []string
+	for _, l := range c.ExperienceHead() {
+		experience = append(experience, cut(l, lineExperienceRunes))
+	}
+	if rest := len(c.ExperienceRest()); rest > 0 {
+		experience = append(experience, fmt.Sprintf("另有 %d 項", rest))
+	}
+	detail(ExperienceLabel, experience)
+	body = append(body, text(c.SourceNote(), map[string]any{"size": "xxs", "color": mutedColor, "margin": "lg"}))
 
 	bubble := map[string]any{
 		"type": "bubble",

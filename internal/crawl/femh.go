@@ -23,6 +23,12 @@ var (
 	femhEducationRe = regexp.MustCompile(`(?s)class=["']h5 color-g name["']>\s*學歷\s*</div>\s*<ul>(.*?)</ul>`)
 )
 
+// femhDetails are the profile's 主治項目、經歷 (OD-18).
+var femhDetails = detailFields{
+	specialty:  regexp.MustCompile(`(?s)class=["']h5 color-g name["']>\s*主治項目\s*</div>\s*<ul>(.*?)</ul>`),
+	experience: regexp.MustCompile(`(?s)class=["']h5 color-g name["']>\s*經歷\s*</div>\s*<ul>(.*?)</ul>`),
+}
+
 // Femh crawls 亞東紀念醫院 (www.femh.org.tw): index → department pages → profile pages.
 type Femh struct {
 	baseURL string
@@ -143,6 +149,7 @@ func (s *Femh) Crawl(ctx context.Context) ([]Doctor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("crawl: femh doctor %s: %w", id, err)
 		}
+		specialty, experience := femhDetails.read(page)
 		doctors = append(doctors, Doctor{
 			Key:         "femh:" + id,
 			Name:        name,
@@ -150,6 +157,8 @@ func (s *Femh) Crawl(ctx context.Context) ([]Doctor, error) {
 			Hospital:    femhHospital,
 			Departments: x.depts[id],
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 	}

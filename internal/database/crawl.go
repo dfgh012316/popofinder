@@ -16,7 +16,7 @@ func (r *Repository) LoadCrawlState(ctx context.Context, source string) ([]crawl
 	pattern := source + ":%"
 	var rows []crawl.ExistingRow
 	if err := r.db.SelectContext(ctx, &rows,
-		"SELECT id, source_key, name, city, hospital, department, education, source_url FROM medical_personnel WHERE source_key LIKE $1 ORDER BY id",
+		"SELECT id, source_key, name, city, hospital, department, education, specialty, experience, source_url FROM medical_personnel WHERE source_key LIKE $1 ORDER BY id",
 		pattern,
 	); err != nil {
 		return nil, nil, fmt.Errorf("repository: load crawl state: %w", err)
@@ -58,16 +58,16 @@ func applyCrawlPlan(ctx context.Context, tx *sqlx.Tx, source string, plan crawl.
 	}
 	for _, row := range plan.Inserts {
 		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO medical_personnel (city, hospital, department, name, education, source, source_url, source_key, source_checked_at) VALUES ($1, $2, $3, $4, $5, 'hospital_directory', $6, $7, $8)",
-			row.City, row.Hospital, nullIfEmpty(row.Department), row.Name, row.Education, row.URL, row.Key, date,
+			"INSERT INTO medical_personnel (city, hospital, department, name, education, specialty, experience, source, source_url, source_key, source_checked_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'hospital_directory', $8, $9, $10)",
+			row.City, row.Hospital, nullIfEmpty(row.Department), row.Name, row.Education, nullIfEmpty(row.Specialty), nullIfEmpty(row.Experience), row.URL, row.Key, date,
 		); err != nil {
 			return err
 		}
 	}
 	for _, u := range plan.Updates {
 		if _, err := tx.ExecContext(ctx,
-			"UPDATE medical_personnel SET name = $1, city = $2, hospital = $3, department = $4, education = $5, source_url = $6, source_checked_at = $7, updated_at = now() WHERE id = $8",
-			u.Row.Name, u.Row.City, u.Row.Hospital, nullIfEmpty(u.Row.Department), u.Row.Education, u.Row.URL, date, u.ID,
+			"UPDATE medical_personnel SET name = $1, city = $2, hospital = $3, department = $4, education = $5, specialty = $6, experience = $7, source_url = $8, source_checked_at = $9, updated_at = now() WHERE id = $10",
+			u.Row.Name, u.Row.City, u.Row.Hospital, nullIfEmpty(u.Row.Department), u.Row.Education, nullIfEmpty(u.Row.Specialty), nullIfEmpty(u.Row.Experience), u.Row.URL, date, u.ID,
 		); err != nil {
 			return err
 		}
