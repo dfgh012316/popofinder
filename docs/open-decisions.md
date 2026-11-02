@@ -312,6 +312,7 @@
   - 不讓整份資料被輕易複製:每個 IP 每分鐘最多 30 次、每天最多 100 次查詢頁面(翻頁也算;依 Cloudflare 的 `CF-Connecting-IP`),一次查詢最多翻到第 20 頁(200 筆,超過就提示加條件縮小範圍),沒有列出全部醫師的頁面。查詢方式和 LINE 一樣,不限定只能查姓名。
   - `search_log` 加 `channel`(`line`/`web`),網頁版只記第一頁(同 LINE,翻頁不記;HEAD 請求也不記)。仍不存使用者(OD-5);網頁版的程式不記 IP,也不把查詢內容寫進 log。
   - 頁面不放 script、不載入外部資源(CSP `default-src 'none'`),並送 `Referrer-Policy: no-referrer`:從卡片點到醫院網站時,對方看不到查了什麼。
+    - 2026-11-03 補註:網頁回應另外帶 `Cache-Control: no-transform`,讓 Cloudflare 不改寫頁面。Cloudflare 的 Email Address Obfuscation(zone 預設開啟)把頁面上的信箱改成「[email protected]」、`mailto:` 改成 `/cdn-cgi/l/email-protection#…`,再插入解碼的 script;CSP 擋下那個 script,補充、更正與下架頁和常見問題的信箱與寄信按鈕從網頁版上線起就是壞的。不改用 Cloudflare 設定關掉:那是 repo 外的狀態,換 zone 或有人重開就又壞,而 `no-transform` 跟著程式走,也一併擋掉其他會插 script 的改寫。
   - **贊助連結先不放**:上線後用 `search_log` 的 `web` 筆數看實際使用量,再專門討論。
   - **SEO 與 AI 搜尋**(沿用 Slipkit 的做法):可收錄的頁面有 canonical、Open Graph/Twitter 分享卡(`og.png`)、各自的 description;首頁有 JSON-LD(`WebApplication`、`FAQPage`)與看得到的「和其他醫師名單有什麼不同」「常見問題」;另有 `/llms.txt`、`/sitemap.xml`(只列可收錄的頁面,不寫 lastmod)、favicon。`robots.txt` 明列主要 AI 檢索器,但**每一組都 `Disallow: /search`**:檢索器只套用最符合自己名字的那一組(RFC 9309),不會再看 `*` 那一組,照抄 Slipkit 的「AI 檢索器 `Allow: /`」會讓查詢結果被收錄與訓練(`TestRobotsEveryGroupDisallowsSearch`)。
   - 「和其他名單的差異」只寫這裡自己做到、查得到的事(出處、不貼標籤、時效、下架管道、查詢方式、無廣告追蹤、程式碼公開),不點名、不評論其他網站;首頁、JSON-LD 與 `llms.txt` 都由 `internal/web/content.go` 的同一份資料產生。資料庫有 74 筆未分類資料沒有來源連結,所以寫「每張卡片都寫明資料來源」,不寫「每筆都附連結」。

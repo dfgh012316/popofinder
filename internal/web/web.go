@@ -453,10 +453,15 @@ func render(w http.ResponseWriter, status int, name string, p page) {
 }
 
 // securityHeaders: no scripts or outside resources, and no Referer, so a hospital
-// site opened from a card does not learn what was searched.
+// site opened from a card does not learn what was searched. no-transform keeps
+// Cloudflare from rewriting the pages: its Email Address Obfuscation replaces the
+// contact address with 「[email protected]」 and adds a script to decode it, which
+// the CSP blocks, so the address and the mail buttons stayed broken. Static files
+// set their own Cache-Control; none of them is HTML, which is all it rewrites.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		h.Set("Cache-Control", "no-transform")
 		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Content-Type-Options", "nosniff")
