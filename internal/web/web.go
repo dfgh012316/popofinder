@@ -248,14 +248,23 @@ func buildFacets(q string, criteria search.Criteria, fs []database.Facet) facets
 var searchParams = []string{"hospital", "dept", "city"}
 
 // composeQuery joins the search form's fields into one search text, as a user would
-// type it; ok is false when the form sent no separate field.
+// type it; ok is false when the form sent no separate field. The city field is left
+// out when the typed text already names a city: ParseCriteria takes only the first
+// city word and would read a second one as a keyword every result must contain.
+// The results heading shows which city was searched.
 func composeQuery(v url.Values) (q string, ok bool) {
-	words := []string{strings.TrimSpace(v.Get("q"))}
+	typed := strings.TrimSpace(v.Get("q"))
+	words := []string{typed}
 	for _, k := range searchParams {
-		if x := strings.TrimSpace(v.Get(k)); x != "" {
-			words = append(words, x)
-			ok = true
+		x := strings.TrimSpace(v.Get(k))
+		if x == "" {
+			continue
 		}
+		ok = true
+		if k == "city" && typed != "" && search.ParseCriteria(typed).City != nil {
+			continue
+		}
+		words = append(words, x)
 	}
 	return strings.TrimSpace(strings.Join(words, " ")), ok
 }

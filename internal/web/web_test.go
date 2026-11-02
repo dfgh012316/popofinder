@@ -311,6 +311,20 @@ func TestSearchComposesFormFields(t *testing.T) {
 	loc, _ = url.Parse(rec.Header().Get("Location"))
 	require.Equal(t, "心臟 台中", loc.Query().Get("q"))
 
+	// A city already typed is not added again: a second city word would be a keyword.
+	for _, tc := range []struct{ query, want string }{
+		{"/search?q=台北%20王&city=台北", "台北 王"},
+		{"/search?q=王%20台北市&city=台北", "王 台北市"},
+		{"/search?q=台北%20王&city=高雄", "台北 王"},
+		{"/search?q=王&city=台北&dept=心臟", "王 心臟 台北"},
+	} {
+		rec = serve(t, New(f), tc.query)
+		require.Equal(t, http.StatusSeeOther, rec.Code, tc.query)
+		loc, _ = url.Parse(rec.Header().Get("Location"))
+		require.Equal(t, tc.want, loc.Query().Get("q"), tc.query)
+		require.NotNil(t, search.ParseCriteria(tc.want).City, tc.query)
+	}
+
 	// Empty fields, as the form sends them, change nothing.
 	rec = serve(t, New(f), "/search?q=陳&city=&hospital=&dept=")
 	require.Equal(t, http.StatusOK, rec.Code)
