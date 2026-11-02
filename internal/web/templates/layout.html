@@ -6,6 +6,7 @@
 {{if .NoIndex}}<meta name="robots" content="noindex, nofollow">
 {{end}}<title>{{.HeadTitle}}</title>
 <meta name="description" content="{{.Description}}">
+<meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 {{with .Canonical}}<link rel="canonical" href="{{.}}">
 <meta property="og:url" content="{{.}}">
@@ -25,59 +26,197 @@
 {{with .JSONLD}}<script type="application/ld+json">{{.}}</script>
 {{end}}
 <style>
-:root{--bg:#f5f7fa;--fg:#222;--muted:#666;--card:#fff;--card-hd:#f0f8ff;--line:#e3e6ea;--accent:#1DB446;--link:#0b62c4}
-@media (prefers-color-scheme:dark){:root{--bg:#15181c;--fg:#e8e8e8;--muted:#a0a6ad;--card:#1f2328;--card-hd:#1b2a3a;--line:#30363d;--accent:#2fca5a;--link:#6cb0ff}}
+/* A reference book: 明體 headwords, entries divided by rules, one 鋼筆藍 for
+   actions and links, and a highlighter only for focus and "you are here". */
+:root{
+  --paper:#f8f9fb;--surface:#fff;--ink:#18233a;--ink-2:#3d4759;--muted:#5d6678;
+  --rule:#dde2ea;--blue:#2345a0;--blue-tint:#e9eefa;--marker:#ffe36a;
+  --bar-official:#256abf;--bar-other:#86b6ef;
+  --serif:"Noto Serif TC","Source Han Serif TC","Source Han Serif","Songti TC","PMingLiU",serif;
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#11161f;--surface:#171e2a;--ink:#e7ebf2;--ink-2:#c4cbd7;--muted:#9aa3b5;
+  --rule:#2b3446;--blue:#9db6ff;--blue-tint:#1d2840;--marker:#d8b73a;
+  --bar-official:#86b6ef;--bar-other:#3a5a9e;
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.65}
-a{color:var(--link)}
-.wrap{max-width:760px;margin:0 auto;padding:0 16px}
-header{background:var(--card);border-bottom:4px solid var(--accent)}
-header .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding-top:12px;padding-bottom:12px}
-.brand{font-weight:700;font-size:20px;color:var(--fg);text-decoration:none;white-space:nowrap}
-form.search{display:flex;flex:1;min-width:240px;gap:8px}
-form.search input{flex:1;min-width:0;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}
-form.search button{font-size:16px;padding:10px 18px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
-main{padding:20px 0 36px}
-h1{font-size:26px;line-height:1.35;margin:4px 0 12px}
-h2{font-size:19px;margin:28px 0 8px}
-footer{border-top:1px solid var(--line);color:var(--muted);font-size:14px;padding:18px 0 32px}
-footer nav{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:6px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--paper);color:var(--ink);font:16px/1.7 var(--sans);font-variant-numeric:tabular-nums}
+a{color:var(--blue);text-underline-offset:.18em}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:3px solid var(--marker);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.35;margin:0}
+p{margin:0 0 12px}
+.wrap{max-width:68rem;margin:0 auto;padding:0 16px}
+.skip{position:absolute;left:-999px}
+.skip:focus{left:16px;top:8px;background:var(--surface);padding:6px 10px;z-index:2}
 .muted{color:var(--muted)}
-.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.summary{white-space:pre-line;margin-bottom:16px}
-.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.card h2{margin:0;padding:12px 18px;background:var(--card-hd);font-size:20px}
-.card dl{margin:0;padding:12px 18px;display:grid;grid-template-columns:5.5em 1fr;gap:6px 12px}
-.card dt{color:var(--muted)}
-.card dd{margin:0;overflow-wrap:anywhere}
-.card .more{border-top:1px solid var(--line);padding:10px 18px;font-weight:700}
-.pager{display:flex;justify-content:space-between;margin-top:18px;font-weight:700}
-.empty{text-align:center;font-weight:700;color:var(--muted);padding:28px 16px}
-.pre{white-space:pre-line}
-ul.examples{padding-left:0;list-style:none}
-ul.examples li{margin:6px 0}
-ul.examples a{font-weight:700;text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:2px 10px;background:var(--card);margin-right:6px}
-h3{font-size:16px;margin:18px 0 4px}
-ul.points{padding-left:18px}
-ul.points li{margin:6px 0}
-ul.links{padding-left:18px}
-ul.links li{margin:6px 0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Header */
+.top{background:var(--surface);border-bottom:1px solid var(--rule)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding-top:12px;padding-bottom:12px}
+.brand{display:flex;align-items:baseline;gap:8px;color:var(--ink);text-decoration:none;margin-right:auto}
+.brand b{font-family:var(--serif);font-size:21px}
+.brand span{font-size:14px;color:var(--muted)}
+.top nav{display:flex;gap:4px 16px;flex-wrap:wrap;font-size:15px}
+.top nav a{color:var(--ink-2);text-decoration:none;padding:4px 0}
+.top nav a[aria-current]{box-shadow:inset 0 -3px 0 var(--marker);color:var(--ink)}
+.top form{flex:1 1 100%;display:flex;gap:8px}
+@media (min-width:860px){.top form{flex:0 1 26rem;order:0}.brand{margin-right:0}.top nav{margin-left:auto}}
+
+/* Search controls */
+input,select,button{font:inherit;color:inherit}
+.field{flex:1;min-width:0;height:44px;padding:0 12px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+.field::placeholder{color:var(--muted)}
+.go{height:44px;padding:0 20px;border:0;border-radius:10px;background:var(--blue);color:var(--surface);font-weight:700;cursor:pointer;white-space:nowrap}
+
+main{flex:1;padding:28px 0 48px}
+.col{max-width:46rem}
+
+/* Home */
+.hero{padding:16px 0 32px;border-bottom:1px solid var(--rule)}
+.hero h1{font-size:clamp(28px,6vw,40px);letter-spacing:.02em;margin-bottom:12px}
+.hero .lead{color:var(--ink-2);max-width:40rem;font-size:17px}
+.lookup{margin-top:20px;max-width:46rem;background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px}
+.lookup .row{display:flex;gap:8px}
+.lookup .main .field{height:52px;font-size:18px;border-color:var(--ink-2)}
+.lookup .main .go{height:52px;font-size:17px}
+.lookup .more{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:10px;margin-top:12px}
+.lookup label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+.lookup label .field{flex:none;height:42px;font-size:16px;color:var(--ink)}
+.lookup .hint{font-size:14px;color:var(--muted);margin:10px 0 0}
+.try{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px;font-size:15px}
+.chip{display:inline-flex;align-items:baseline;gap:6px;padding:5px 12px;border-radius:999px;background:var(--blue-tint);color:var(--ink);text-decoration:none;font-size:15px;line-height:1.5}
+.chip:hover{box-shadow:inset 0 0 0 1px var(--blue)}
+.chip .num{color:var(--muted);font-size:13px}
+.chip small{color:var(--muted);font-size:12px}
+
+section.block{padding:32px 0;border-bottom:1px solid var(--rule)}
+section.block:last-of-type{border-bottom:0}
+section.block>h2{font-size:24px;margin-bottom:10px}
+.block .intro{color:var(--ink-2);max-width:44rem}
+
+/* Coverage index: one row per city, the bar splits official directories from other sources. */
+.legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:14px;color:var(--muted);margin:4px 0 14px}
+.legend i{display:inline-block;width:14px;height:8px;border-radius:4px;margin-right:6px;vertical-align:middle}
+.k-official{background:var(--bar-official)}
+.k-other{background:var(--bar-other)}
+.regions{display:grid;gap:20px 32px;grid-template-columns:repeat(auto-fit,minmax(14.5rem,1fr))}
+.region h3{font-size:19px;display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:4px}
+.region h3 .num{font-family:var(--sans);font-size:14px;font-weight:400;color:var(--muted)}
+.cities{list-style:none;margin:0;padding:0}
+.cities li{display:grid;grid-template-columns:3.2em 1fr 3.6em;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule)}
+.cities a{font-weight:700;text-decoration:none;color:var(--ink)}
+.cities a:hover{color:var(--blue);text-decoration:underline}
+.cities .num{text-align:right;font-size:15px}
+.cities .sub{grid-column:2 / 4;font-size:13px;color:var(--muted);margin-top:-6px}
+.bar{display:flex;gap:2px;height:8px}
+.bar span{display:block;height:8px;border-radius:4px;min-width:3px}
+.bar .o{background:var(--bar-official)}
+.bar .x{background:var(--bar-other)}
+
+.points{display:grid;gap:18px 32px;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));list-style:none;padding:0;margin:16px 0 0}
+.points b{display:block;font-family:var(--serif);font-size:17px;margin-bottom:2px}
+.points span{color:var(--ink-2);font-size:15px}
+.faq details{border-bottom:1px solid var(--rule);max-width:46rem}
+.faq summary{cursor:pointer;padding:12px 0;font-weight:700}
+.faq details p{color:var(--ink-2);margin:0 0 14px}
+
+/* Results */
+.results{display:grid;gap:20px}
+.results>*{min-width:0}
+@media (min-width:960px){
+  .results{grid-template-columns:minmax(0,46rem) 18rem;justify-content:space-between;column-gap:40px}
+  .results .head,.results .list{grid-column:1}
+  .results aside{grid-column:2;grid-row:1 / span 2;position:sticky;top:16px;align-self:start}
+}
+.head h1{font-size:clamp(24px,5vw,32px);overflow-wrap:anywhere}
+.head .meta{color:var(--ink-2);margin:8px 0 0}
+.head .meta span{display:block}
+.head .meta span:last-child{font-size:14px;color:var(--muted)}
+.head .note{font-size:14px;color:var(--muted);margin-top:4px}
+.narrow h2{font-size:17px;margin-bottom:8px}
+.narrow h3{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--muted);margin:12px 0 6px}
+.narrow .chips{display:flex;flex-wrap:wrap;gap:6px}
+@media (max-width:959px){
+  /* One swipeable row per group, so the results stay near the top. */
+  .narrow .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+  .narrow .chip{flex:none}
+}
+.entries{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.entry{padding:18px 0 16px;border-bottom:1px solid var(--rule)}
+.entry h2{font-size:24px;letter-spacing:.04em}
+.entry .where{margin:2px 0 10px;color:var(--ink-2)}
+.entry .where span+span::before{content:"／";color:var(--muted);margin:0 4px}
+.entry dl{display:grid;grid-template-columns:4.5em 1fr;gap:6px 14px;margin:0}
+.entry dt{color:var(--muted);font-size:14px;padding-top:2px}
+.entry dd{margin:0;overflow-wrap:anywhere}
+.entry dd ul{margin:0;padding:0;list-style:none}
+.entry dd li+li{margin-top:2px}
+.entry .src{font-size:15px}
+.entry .xref{display:inline-block;margin-top:12px;font-weight:700;text-decoration:none}
+.entry .xref:hover{text-decoration:underline}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}
+.pager a{font-weight:700}
+.empty{padding:20px 0}
+.empty h2{font-size:22px;margin-bottom:10px}
+.empty ul{padding-left:1.2em;color:var(--ink-2)}
+.capped{color:var(--muted);font-size:15px;margin-top:16px}
+
+/* Coverage page */
+.city-block{padding:14px 0;border-bottom:1px solid var(--rule)}
+.city-block h3{font-size:18px;display:flex;align-items:baseline;gap:12px}
+.city-block h3 .num{font-family:var(--sans);font-size:14px;font-weight:400;color:var(--muted)}
+.city-block .bar{margin:8px 0;max-width:30rem}
+.hosp{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px 24px;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))}
+.hosp li{display:flex;justify-content:space-between;gap:12px;padding:4px 0}
+.hosp .num{color:var(--muted);font-size:14px}
+.thumbs{display:flex;gap:6px;margin:6px 0 4px;flex-wrap:wrap}
+.thumbs a{padding:4px 14px;border-radius:999px;background:var(--blue-tint);color:var(--ink);text-decoration:none;font-family:var(--serif);font-weight:700}
+.region-block{scroll-margin-top:12px;padding-top:20px}
+.region-block>h2{font-size:24px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+.region-block:target>h2{box-shadow:inset 0 -6px 0 var(--marker)}
+
+.lede{margin-top:10px}
+.small{font-size:14px;margin:4px 0 0}
+.end-note{margin-top:24px}
+
+/* Report */
+.report h1{margin-bottom:16px}
+.report>p{white-space:pre-line;color:var(--ink-2)}
+.report .small{margin-top:12px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.actions a{display:inline-flex;align-items:center;height:44px;padding:0 18px;border-radius:10px;background:var(--blue);color:var(--surface);font-weight:700;text-decoration:none}
+.actions a.quiet{background:var(--blue-tint);color:var(--ink)}
+.message{padding:24px 0;font-size:18px}
+
+footer{border-top:1px solid var(--rule);background:var(--surface);color:var(--muted);font-size:14px;padding:20px 0 32px}
+footer nav{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:8px}
+footer a{color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<header><div class="wrap">
-<a class="brand" href="/">POPO Finder</a>
-<form class="search" action="/search" method="get" role="search">
-<input name="q" value="{{.Query}}" placeholder="姓名、醫院或科別，例如：三總 牙科" aria-label="查詢醫師" maxlength="300" required>
-<button type="submit">查詢</button>
+<a class="skip" href="#main">跳到主要內容</a>
+<header class="top"><div class="wrap">
+<a class="brand" href="/"><b>POPO Finder</b><span>醫師學歷查詢</span></a>
+{{if .HeaderSearch}}<form action="/search" method="get" role="search">
+<input class="field" name="q" value="{{.Query}}" placeholder="醫師姓名、醫院或科別" aria-label="查詢醫師" maxlength="300" required>
+<button class="go" type="submit">查詢</button>
 </form>
+{{end}}<nav aria-label="網站">
+<a href="/hospitals"{{if eq .Nav "hospitals"}} aria-current="page"{{end}}>收錄範圍</a>
+<a href="/report"{{if eq .Nav "report"}} aria-current="page"{{end}}>補充與更正</a>
+<a href="{{.LineURL}}" rel="noopener">LINE 版</a>
+</nav>
 </div></header>
-<main><div class="wrap">
+<main id="main"><div class="wrap">
 {{template "content" .Content}}
 </div></main>
 <footer><div class="wrap">
-<nav><a href="/">查詢說明</a><a href="/hospitals">醫院清單</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a></nav>
+<nav aria-label="頁尾"><a href="/">查詢</a><a href="/hospitals">收錄範圍</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a><a href="{{.RepoURL}}" rel="noopener">程式碼</a></nav>
 <div>只呈現公開的學歷事實，不評價任何醫師。</div>
 </div></footer>
 </body>

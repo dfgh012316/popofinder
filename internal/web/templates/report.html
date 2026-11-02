@@ -1,4 +1,11 @@
 {{define "content"}}
-<div class="box pre">{{.Text}}</div>
-<p><a href="mailto:{{.Email}}">寄信到 {{.Email}}</a></p>
+<div class="col report">
+<h1>補充、更正與下架</h1>
+{{range $i, $p := .Paragraphs}}{{if $i}}<p>{{$p}}</p>
+{{end}}{{end}}<div class="actions">
+<a href="{{.AddURL}}">寄信補充學歷</a>
+<a class="quiet" href="{{.FixURL}}">寄信更正或下架</a>
+</div>
+<p class="small muted">信箱：{{.Email}}</p>
+</div>
 {{end}}

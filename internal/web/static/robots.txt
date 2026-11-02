@@ -1,5 +1,5 @@
 # POPO Finder — 台灣醫師學歷查詢
-# 歡迎搜尋引擎與 AI/LLM 檢索器收錄首頁、醫院清單與說明頁。
+# 歡迎搜尋引擎與 AI/LLM 檢索器收錄首頁、收錄範圍與說明頁。
 # 給 LLM 的網站說明：https://popo.jerrytech.me/llms.txt
 #
 # /search 是查詢結果，含具名醫師的學歷，不開放任何檢索器收錄或用於訓練

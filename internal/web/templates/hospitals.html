@@ -1,8 +1,22 @@
 {{define "content"}}
-<h1>已收錄官網醫師名單的醫院</h1>
-<p class="muted">點醫院名稱即可查詢</p>
-<ul class="links">
-{{range .Links}}<li><a href="/search?q={{.Query}}">{{.Label}}</a></li>
+<div class="col">
+<h1>收錄範圍</h1>
+<p class="muted lede">共 <b class="num">{{comma .Stats.Total}}</b> 位醫師，其中 <b class="num">{{comma .Stats.Official}}</b> 位來自 {{.Stats.Hospitals}} 家醫療院所官網的完整名單{{with .Stats.CheckedOn}}（最近一次查到 <span class="num">{{.}}</span>）{{end}}。</p>
+<p class="legend"><span><i class="k-official"></i>官網完整名單</span><span><i class="k-other"></i>網路公開彙整與其他來源</span></p>
+<nav class="thumbs" aria-label="地區">{{range .Stats.Regions}}<a href="#{{.ID}}">{{.Name}}</a>{{end}}</nav>
+</div>
+{{$max := maxCity .Stats}}{{range .Stats.Regions}}<section class="region-block col" id="{{.ID}}" aria-label="{{.Name}}">
+<h2>{{.Name}}</h2>
+{{range .Cities}}<div class="city-block">
+<h3>{{.City}}<span class="num">{{comma .Total}} 位</span></h3>
+<div class="bar" title="{{.City}}：官網名單 {{comma .Official}} 位，其他來源 {{comma (minus .Total .Official)}} 位" aria-hidden="true">{{if .Official}}<span class="o" style="width:{{pct .Official $max}}"></span>{{end}}{{if gt .Total .Official}}<span class="x" style="width:{{pct (minus .Total .Official) $max}}"></span>{{end}}</div>
+{{if .Hospitals}}<ul class="hosp">
+{{range .Hospitals}}<li><a href="/search?q={{.Query}}">{{.Name}}</a><span class="num">{{comma .Count}} 位{{with .CheckedOn}}，{{.}} 查到{{end}}</span></li>
 {{end}}</ul>
-<p class="muted">{{.Note}}</p>
+{{else if .Total}}<p class="small muted">還沒有官網完整名單，資料來自網路公開彙整與其他來源。<a href="/search?q={{.City}}">查{{.City}}的醫師</a></p>
+{{else}}<p class="small muted">尚未收錄。</p>
+{{end}}</div>
+{{end}}</section>
+{{end}}
+<p class="col small muted end-note">{{.Note}}</p>
 {{end}}

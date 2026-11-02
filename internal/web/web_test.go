@@ -34,6 +34,8 @@ type fakeStore struct {
 	offsets   []int
 	logs      []logged
 	hospitals []database.DirectoryHospital
+	facets    []database.Facet
+	cities    []database.CityCount
 }
 
 func (f *fakeStore) Search(c search.Criteria, offset int) ([]database.MedicalPersonnel, database.SearchStats, error) {
@@ -48,6 +50,14 @@ func (f *fakeStore) LogSearch(_ context.Context, c search.Criteria, n int, chann
 
 func (f *fakeStore) DirectoryHospitals(context.Context) ([]database.DirectoryHospital, error) {
 	return f.hospitals, nil
+}
+
+func (f *fakeStore) SearchFacets(context.Context, search.Criteria) ([]database.Facet, error) {
+	return f.facets, nil
+}
+
+func (f *fakeStore) CityCounts(context.Context) ([]database.CityCount, error) {
+	return f.cities, nil
 }
 
 func serve(t *testing.T, h *Handler, target string, header ...string) *httptest.ResponseRecorder {
@@ -65,7 +75,7 @@ func serve(t *testing.T, h *Handler, target string, header ...string) *httptest.
 
 type searchLink struct{ Q, Page, Text string }
 
-var searchHref = regexp.MustCompile(`href="/search\?([^"]*)">([^<]*)<`)
+var searchHref = regexp.MustCompile(`href="/search\?([^"]*)"[^>]*>([^<]*)<`)
 
 // searchLinks decodes the /search links in body, whatever escaping the template chose.
 func searchLinks(t *testing.T, body string) []searchLink {
@@ -96,7 +106,7 @@ func TestHomeIsIndexable(t *testing.T) {
 	body := rec.Body.String()
 	require.Contains(t, body, `action="/search"`)
 	require.Contains(t, body, linetemplate.CoverageText)
-	require.Contains(t, searchLinks(t, body), searchLink{Q: "台北@醫院 三總", Text: "台北@醫院 三總"})
+	require.Contains(t, searchLinks(t, body), searchLink{Q: "三總 牙科", Text: "三總 牙科"})
 	require.NotContains(t, body, "noindex")
 	require.Empty(t, rec.Header().Get("X-Robots-Tag"))
 	require.Equal(t, "no-referrer", rec.Header().Get("Referrer-Policy"))
@@ -113,7 +123,11 @@ func TestSearchRendersCardsAndLogsFirstPage(t *testing.T) {
 	require.Equal(t, []int{0}, f.offsets)
 	require.Equal(t, []logged{{criteria, 15, database.ChannelWeb}}, f.logs)
 	body := rec.Body.String()
-	require.Contains(t, body, linetemplate.SearchSummary(criteria, f.stats))
+	summary := strings.Split(linetemplate.SearchSummary(criteria, f.stats), "\n")
+	require.Contains(t, body, "<h1>"+summary[0]+"</h1>", "the summary's first line is the heading")
+	for _, line := range summary[1:] {
+		require.Contains(t, body, "<span>"+line+"</span>")
+	}
 	require.Contains(t, body, "王&lt;b&gt;大明&lt;/b&gt;", "names are escaped")
 	require.Contains(t, body, "點此查看來源（2026-10-31 查到）")
 	require.Contains(t, body, `href="https://hospital.example/doc/1" target="_blank" rel="noopener noreferrer nofollow"`)
@@ -218,19 +232,132 @@ func TestLimiterWindowResets(t *testing.T) {
 }
 
 func TestHospitalsLinksSearch(t *testing.T) {
-	f := &fakeStore{hospitals: []database.DirectoryHospital{{City: "台北", Hospital: "馬偕紀念醫院", Count: 443}}}
+	f := &fakeStore{
+		cities:    []database.CityCount{{City: "台北", Total: 500, Official: 443}, {City: "台中", Total: 20}},
+		hospitals: []database.DirectoryHospital{{City: "台北", Hospital: "馬偕紀念醫院", Count: 443, CheckedAt: sql.NullTime{Time: time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC), Valid: true}}},
+	}
 	rec := serve(t, New(f), "/hospitals")
 	require.Equal(t, http.StatusOK, rec.Code)
 	body := rec.Body.String()
-	require.Contains(t, searchLinks(t, body), searchLink{Q: linetemplate.HospitalSearchText(f.hospitals[0]), Text: "馬偕紀念醫院 443 位"})
+	require.Contains(t, searchLinks(t, body), searchLink{Q: linetemplate.HospitalSearchText(f.hospitals[0]), Text: "馬偕紀念醫院"})
+	require.Contains(t, body, "443 位，2026-10-12 查到")
+	require.Contains(t, body, "共 <b class=\"num\">520</b> 位醫師，其中 <b class=\"num\">443</b> 位來自 1 家醫療院所官網的完整名單（最近一次查到 <span class=\"num\">2026-10-12</span>）")
+	// A city without an official directory says where its doctors come from.
+	require.Contains(t, searchLinks(t, body), searchLink{Q: "台中", Text: "查台中的醫師"})
 	require.Contains(t, body, linetemplate.HospitalListNote)
+}
+
+func TestHomeShowsCoverage(t *testing.T) {
+	f := &fakeStore{
+		cities:    []database.CityCount{{City: "台北", Total: 1200, Official: 900}, {City: "高雄", Total: 300}},
+		hospitals: []database.DirectoryHospital{{City: "台北", Hospital: "馬偕紀念醫院", Count: 900}},
+	}
+	rec := serve(t, New(f), "/")
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	require.Contains(t, body, "共 <b class=\"num\">1,500</b> 位醫師，其中 <b class=\"num\">900</b> 位來自 1 家醫療院所官網的完整名單")
+	links := searchLinks(t, body)
+	require.Contains(t, links, searchLink{Q: "台北", Text: "台北"})
+	require.Contains(t, links, searchLink{Q: "高雄", Text: "高雄"})
+	require.NotContains(t, links, searchLink{Q: "台東", Text: "台東"}, "a city with no doctor is not a link")
+	// The bars are shares of the largest city: 台北 900 + 300 of 1,200, 高雄 300.
+	require.Contains(t, body, `<span class="o" style="width:75.00%"></span><span class="x" style="width:25.00%"></span>`)
+	require.Contains(t, body, `<span class="x" style="width:25.00%"></span></span>
+<span class="num">300</span>`)
+	require.Contains(t, body, "官網名單 1 家")
+	require.Contains(t, body, `<option value="馬偕紀念醫院">`, "the hospital field suggests the listed hospitals")
+}
+
+func TestHomeWorksWithoutCoverage(t *testing.T) {
+	rec := serve(t, New(&failingCoverage{}), "/")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `action="/search"`)
+	require.NotContains(t, rec.Body.String(), `id="coverage"`)
+}
+
+type failingCoverage struct{ fakeStore }
+
+func (*failingCoverage) CityCounts(context.Context) ([]database.CityCount, error) {
+	return nil, sql.ErrConnDone
+}
+
+func TestRegionsCoverEveryCity(t *testing.T) {
+	seen := map[string]bool{}
+	for _, r := range regions {
+		for _, c := range r.Cities {
+			require.False(t, seen[c], "%s is in two regions", c)
+			seen[c] = true
+			got := search.ParseCriteria(c).City
+			require.NotNil(t, got, "%s is a search city", c)
+			require.Equal(t, c, *got)
+		}
+	}
+	require.Len(t, seen, 17)
+}
+
+func TestSearchComposesFormFields(t *testing.T) {
+	f := &fakeStore{}
+	rec := serve(t, New(f), "/search?q=王&city=台中&hospital=中榮&dept=心臟")
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	require.NoError(t, err)
+	require.Equal(t, "/search", loc.Path)
+	require.Equal(t, "王 中榮 心臟 台中", loc.Query().Get("q"))
+	require.Empty(t, f.offsets, "the redirect does not search")
+
+	// Only the fields: still one search text.
+	rec = serve(t, New(f), "/search?q=&city=台中&hospital=&dept=心臟")
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+	loc, _ = url.Parse(rec.Header().Get("Location"))
+	require.Equal(t, "心臟 台中", loc.Query().Get("q"))
+
+	// Empty fields, as the form sends them, change nothing.
+	rec = serve(t, New(f), "/search?q=陳&city=&hospital=&dept=")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, f.offsets, 1)
+
+	rec = serve(t, New(f), "/search?q=&city=&hospital=&dept=")
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+	require.Equal(t, "/", rec.Header().Get("Location"))
+}
+
+func TestSearchOffersFacets(t *testing.T) {
+	f := &fakeStore{
+		personnel: []database.MedicalPersonnel{doctor()},
+		stats:     database.SearchStats{TotalCount: 30, CurrentPage: 1, TotalPages: 3, HasMore: true, MatchCounts: database.MatchCounts{Name: 30}},
+		facets:    []database.Facet{{City: "台北", Hospital: "馬偕紀念醫院", Count: 12}, {City: "新北", Hospital: "亞東紀念醫院", Count: 10}, {City: "台北", Hospital: "國泰綜合醫院", Count: 8}},
+	}
+	links := searchLinks(t, serve(t, New(f), "/search?q=陳").Body.String())
+	require.Contains(t, links, searchLink{Q: "陳 台北", Text: "台北"})
+	require.Contains(t, links, searchLink{Q: "陳 新北", Text: "新北"})
+	require.Contains(t, links, searchLink{Q: "陳 台北 馬偕紀念醫院", Text: "馬偕紀念醫院"}, "the city keeps 國泰綜合醫院 from also matching 汐止國泰綜合醫院")
+}
+
+func TestBuildFacets(t *testing.T) {
+	fs := []database.Facet{{City: "台北", Hospital: "馬偕紀念醫院", Count: 5}, {City: "新北", Hospital: "亞東紀念醫院", Count: 7}, {City: "新北", Hospital: "雙和醫院", Count: 1}}
+
+	got := buildFacets("陳", search.ParseCriteria("陳"), fs)
+	require.Equal(t, []facetLink{{Label: "新北", Query: "陳 新北", Count: 8}, {Label: "台北", Query: "陳 台北", Count: 5}}, got.Cities, "most first")
+	require.Len(t, got.Hospitals, 3)
+
+	// With a city, no city facets, and a hospital facet adds no second city word.
+	got = buildFacets("台北 陳", search.ParseCriteria("台北 陳"), fs[:1])
+	require.Empty(t, got.Cities)
+	require.Empty(t, got.Hospitals, "a single hospital does not narrow")
+	got = buildFacets("台北 陳", search.ParseCriteria("台北 陳"), []database.Facet{fs[0], {City: "台北", Hospital: "國泰綜合醫院", Count: 2}})
+	require.Equal(t, "台北 陳 馬偕紀念醫院", got.Hospitals[0].Query)
+
+	// In an @醫院 search an added word would be read as another hospital.
+	require.Equal(t, facets{}, buildFacets("台北@醫院 三總", search.ParseCriteria("台北@醫院 三總"), fs))
 }
 
 func TestReportShowsContact(t *testing.T) {
 	rec := serve(t, New(&fakeStore{}), "/report")
 	require.Equal(t, http.StatusOK, rec.Code)
-	require.Contains(t, rec.Body.String(), `href="mailto:`+linetemplate.ContactEmail+`"`)
-	require.Contains(t, rec.Body.String(), "核對完就刪除")
+	body := rec.Body.String()
+	require.Contains(t, body, `href="mailto:`+linetemplate.ContactEmail+`?subject=%E8%A3%9C%E5%85%85%E9%86%AB%E5%B8%AB%E5%AD%B8%E6%AD%B7"`, "the subject 補充醫師學歷, encoded")
+	require.Contains(t, body, linetemplate.ContactEmail)
+	require.Contains(t, body, "核對完就刪除")
 }
 
 // Every group must disallow /search: a crawler obeys only the group that names it
