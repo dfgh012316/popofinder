@@ -175,7 +175,7 @@ func (h *Handler) about(w http.ResponseWriter, r *http.Request) {
 }
 
 // cardLabels are the doctor cards' fixed texts, shared with LINE.
-type cardLabels struct{ Education, SourceLink, SameDepartment string }
+type cardLabels struct{ Education, Specialty, Experience, SourceLink, SameDepartment string }
 
 type results struct {
 	Query      string
@@ -292,8 +292,9 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := results{Query: q, Summary: linetemplate.NewSummary(criteria, stats), Note: linetemplate.CoverageNote,
-		Labels: cardLabels{linetemplate.EducationLabel, linetemplate.SourceLinkLabel, linetemplate.SameDepartmentLabel},
-		Page:   pageNo, TotalPages: min(stats.TotalPages, maxPages), CappedAt: maxPages * database.PageSize}
+		Labels: cardLabels{linetemplate.EducationLabel, linetemplate.SpecialtyLabel, linetemplate.ExperienceLabel,
+			linetemplate.SourceLinkLabel, linetemplate.SameDepartmentLabel},
+		Page: pageNo, TotalPages: min(stats.TotalPages, maxPages), CappedAt: maxPages * database.PageSize}
 	for _, person := range personnel {
 		res.Cards = append(res.Cards, linetemplate.NewCard(person))
 	}

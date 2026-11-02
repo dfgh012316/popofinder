@@ -159,6 +159,22 @@ func TestSearchCardWithMissingFields(t *testing.T) {
 	}
 }
 
+// 專長 shows in full; 經歷 shows its first lines and folds the rest (OD-18).
+func TestSearchCardShowsSpecialtyAndExperience(t *testing.T) {
+	d := doctor()
+	d.Specialty = sql.NullString{String: "高血壓；心臟衰竭", Valid: true}
+	d.Experience = sql.NullString{String: "甲；乙；丙；丁；戊", Valid: true}
+	f := &fakeStore{personnel: []database.MedicalPersonnel{d}, stats: database.SearchStats{TotalCount: 1, CurrentPage: 1, TotalPages: 1}}
+	body := serve(t, New(f), "/search?q="+url.QueryEscape("王")).Body.String()
+	require.Contains(t, body, `<h3>專長</h3><ul><li>高血壓</li><li>心臟衰竭</li></ul>`)
+	require.Contains(t, body, `<h3>經歷</h3><ul><li>甲</li><li>乙</li><li>丙</li></ul>`)
+	require.Contains(t, body, `<details><summary>其他 2 項</summary><ul><li>丁</li><li>戊</li></ul></details>`)
+
+	f.personnel = []database.MedicalPersonnel{doctor()}
+	body = serve(t, New(f), "/search?q="+url.QueryEscape("王")).Body.String()
+	require.NotContains(t, body, `class="detail"`)
+}
+
 func TestSearchLaterPagesAreNotLogged(t *testing.T) {
 	f := &fakeStore{personnel: []database.MedicalPersonnel{doctor()}, stats: database.SearchStats{TotalCount: 25, CurrentPage: 2, TotalPages: 3, HasMore: true}}
 	rec := serve(t, New(f), "/search?q=陳&page=2")

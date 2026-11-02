@@ -69,6 +69,8 @@ func TestShhCrawlAggregatesDepartments(t *testing.T) {
 
 	require.Len(t, got, 3)
 	require.Equal(t, "shh:10001", got[0].Key)
+	require.Equal(t, []string{"高血壓"}, got[0].Specialty, "OD-18")
+	require.Equal(t, []string{"雙和醫院心臟內科總醫師"}, got[0].Experience)
 	require.Equal(t, "shh:10002", got[1].Key)
 	require.Equal(t, "shh:10003", got[2].Key)
 	require.Equal(t, []string{"心臟內科", "一般外科"}, got[1].Departments)

@@ -110,6 +110,8 @@ func TestKmuhCrawlFirstHospitalWins(t *testing.T) {
 	require.Equal(t, "高雄", got[0].City)
 	require.Equal(t, []string{"心臟血管內科"}, got[0].Departments)
 	require.Equal(t, main.URL+"/Web/WebRegistration/DocIntro/DocDetail?lang=tw&doctorID=900001&virtualCode=HD01&dCode=0130", got[0].URL)
+	require.Equal(t, []string{"心臟超音波", "高血壓"}, got[0].Specialty, "OD-18")
+	require.Len(t, got[0].Experience, 2)
 	require.Equal(t, []string{"心臟血管內科", "胃腸內科"}, got[1].Departments)
 	require.Equal(t, "高醫岡山醫院", got[4].Hospital)
 	require.Equal(t, []string{"心臟內科"}, got[4].Departments)

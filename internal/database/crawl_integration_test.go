@@ -4,10 +4,12 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/dfgh012316/popofinder/internal/crawl"
+	"github.com/dfgh012316/popofinder/internal/linebot/search"
 	"github.com/stretchr/testify/require"
 )
 
@@ -132,4 +134,40 @@ func TestCrawlDoesNotReAddTakenDownDoctor(t *testing.T) {
 	var count int
 	require.NoError(t, r.db.Get(&count, "SELECT count(*) FROM medical_personnel"))
 	require.Zero(t, count)
+}
+
+// 專長 and 經歷 are written on insert and on update, NULL when the page has none,
+// and read back by LoadCrawlState and Search (OD-18).
+func TestApplyCrawlPlanWritesSpecialtyAndExperience(t *testing.T) {
+	r := openIntegrationDB(t)
+	d := crawlDoctor("femh:1", "國立台灣大學醫學系")
+	d.Specialty = []string{"糖尿病"}
+	plain := crawlDoctor("femh:2", "國立台灣大學醫學系")
+	syncFemh(t, r, []crawl.Doctor{d, plain}, time.Date(2026, 11, 3, 12, 0, 0, 0, taipei))
+
+	var got []struct {
+		Specialty  sql.NullString `db:"specialty"`
+		Experience sql.NullString `db:"experience"`
+	}
+	require.NoError(t, r.db.Select(&got, "SELECT specialty, experience FROM medical_personnel ORDER BY source_key"))
+	require.Equal(t, valid("糖尿病"), got[0].Specialty)
+	require.False(t, got[0].Experience.Valid, "no 經歷 is NULL, not an empty string")
+	require.False(t, got[1].Specialty.Valid)
+
+	d.Experience = []string{"甲醫院 住院醫師"}
+	syncFemh(t, r, []crawl.Doctor{d, plain}, time.Date(2026, 11, 4, 12, 0, 0, 0, taipei))
+	rows, _, err := r.LoadCrawlState(context.Background(), "femh")
+	require.NoError(t, err)
+	require.Equal(t, valid("甲醫院 住院醫師"), rows[0].Experience)
+
+	ps, _, err := r.Search(search.ParseCriteria("王"), 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, ps)
+	var found bool
+	for _, p := range ps {
+		if p.Specialty.String == "糖尿病" && p.Experience.String == "甲醫院 住院醫師" {
+			found = true
+		}
+	}
+	require.True(t, found, "Search returns both fields")
 }

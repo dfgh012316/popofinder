@@ -15,6 +15,13 @@ var (
 	cgmhEducationRe = regexp.MustCompile(`(?s)<div class="fz-24 fwb">\s*學歷\s*</div>\s*<ul[^>]*>(.*?)</ul>`)
 )
 
+// cgmhDetails are the profile's 經歷 (OD-18). Whether and how the site shows a
+// 專長 field has not been checked against a real page.
+var cgmhDetails = detailFields{
+	specialty:  nil,
+	experience: regexp.MustCompile(`(?s)<div class="fz-24 fwb">\s*經歷\s*</div>\s*<ul[^>]*>(.*?)</ul>`),
+}
+
 type cgmhCampus struct {
 	code     string // DeptList/<code>
 	hospital string
@@ -175,6 +182,7 @@ func (s *Cgmh) crawlCampus(ctx context.Context, c cgmhCampus, p *cgmhProgress) (
 		if err != nil {
 			return nil, fmt.Errorf("crawl: cgmh doctor %s: %w", id, err)
 		}
+		specialty, experience := cgmhDetails.read(page)
 		doctors = append(doctors, Doctor{
 			Key:         "cgmh:" + id,
 			Name:        name,
@@ -182,6 +190,8 @@ func (s *Cgmh) crawlCampus(ctx context.Context, c cgmhCampus, p *cgmhProgress) (
 			Hospital:    c.hospital,
 			Departments: x.depts[id],
 			Education:   education,
+			Specialty:   specialty,
+			Experience:  experience,
 			URL:         u,
 		})
 	}
