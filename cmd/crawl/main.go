@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	sources := flag.String("sources", "", "要爬的來源,逗號分隔(目前支援:femh,shh,mmh,cgh,cgmh,kmuh,kmsh,smile)")
+	sources := flag.String("sources", "", "要爬的來源,逗號分隔(目前支援:femh,shh,mmh,cgh,cgmh,kmuh,kmsh,smile,vghtc)")
 	dryRun := flag.Bool("dry-run", false, "只印出計畫,不寫入資料庫")
 	flag.Parse()
 
@@ -28,6 +28,7 @@ func main() {
 		"kmuh":  crawl.NewKmuh("https://www.kmuh.org.tw", "https://www.kmugh.org.tw", fetcher),
 		"kmsh":  crawl.NewKmsh("https://www.kmsh.org.tw/Web/wwwKMHK/dept/8300/2024KMSH/pro", fetcher),
 		"smile": crawl.NewSmile("https://www.smile-dental.tw", fetcher),
+		"vghtc": crawl.NewVghtc("https://register.vghtc.gov.tw/register", fetcher),
 	}
 
 	// Validate before connecting so a typo never touches the database.
