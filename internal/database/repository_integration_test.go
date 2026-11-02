@@ -211,12 +211,66 @@ func TestDirectoryHospitals(t *testing.T) {
 		('台北', '丙醫院', '內科', '林一', 'blog'),
 		('台北', '丁醫院', '內科', '林二', NULL)`)
 
+	r.db.MustExec(`UPDATE medical_personnel SET source_checked_at = '2026-10-12' WHERE name = '李小華'`)
+	r.db.MustExec(`UPDATE medical_personnel SET source_checked_at = '2026-11-01' WHERE name = '張小美'`)
+
 	got, err := r.DirectoryHospitals(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, []DirectoryHospital{
-		{City: "新北", Hospital: "乙醫院", Count: 2},
-		{City: "台北", Hospital: "甲醫院", Count: 1},
-	}, got)
+	require.Len(t, got, 2)
+	require.Equal(t, DirectoryHospital{City: "新北", Hospital: "乙醫院", Count: 2}, DirectoryHospital{City: got[0].City, Hospital: got[0].Hospital, Count: got[0].Count})
+	require.Equal(t, "2026-11-01", got[0].CheckedAt.Time.Format("2006-01-02"), "the latest checked date")
+	require.Equal(t, DirectoryHospital{City: "台北", Hospital: "甲醫院", Count: 1}, got[1], "no checked date")
+}
+
+func TestCityCounts(t *testing.T) {
+	r := openIntegrationDB(t)
+	r.db.MustExec(`INSERT INTO medical_personnel (city, hospital, department, name, source) VALUES
+		('台北', '甲醫院', '內科', '王小明', 'hospital_directory'),
+		('台北', '丙醫院', '內科', '林一', 'blog'),
+		('新北', '乙醫院', '牙科', '陳大文', 'blog'),
+		('新北', '乙醫院', '牙科', '張小美', NULL),
+		('新北', '乙醫院', '內科', '李小華', 'hospital_directory'),
+		('', '戊診所', '內科', '林二', 'blog')`)
+
+	got, err := r.CityCounts(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []CityCount{
+		{City: "新北", Total: 3, Official: 1},
+		{City: "台北", Total: 2, Official: 1},
+	}, got, "most first; a row without a city is left out")
+}
+
+func TestSearchFacetsUseTheSearchFilter(t *testing.T) {
+	r := openIntegrationDB(t)
+	seedPersonnel(t, r, [][4]any{
+		{"台北", "馬偕紀念醫院", "心臟內科", "陳大文"},
+		{"台北", "馬偕紀念醫院", "牙科", "陳小明"},
+		{"新北", "亞東紀念醫院", "心臟內科", "陳一"},
+		{"台北", "國泰綜合醫院", "心臟內科", "王二"},
+		{"台北", "臺大醫院", "心臟內科", "陳三"},
+	})
+	ctx := context.Background()
+
+	got, err := r.SearchFacets(ctx, search.ParseCriteria("陳"))
+	require.NoError(t, err)
+	require.Equal(t, []Facet{
+		{City: "台北", Hospital: "馬偕紀念醫院", Count: 2},
+		{City: "台北", Hospital: "臺大醫院", Count: 1},
+		{City: "新北", Hospital: "亞東紀念醫院", Count: 1},
+	}, got, "most first, then city and hospital")
+
+	// The same words, city and 臺/台 handling as Search.
+	criteria := search.ParseCriteria("台北 陳 心臟")
+	got, err = r.SearchFacets(ctx, criteria)
+	require.NoError(t, err)
+	_, stats, err := r.Search(criteria, 0)
+	require.NoError(t, err)
+	total := 0
+	for _, f := range got {
+		total += f.Count
+	}
+	require.Equal(t, stats.TotalCount, total)
+	require.ElementsMatch(t, []Facet{{City: "台北", Hospital: "馬偕紀念醫院", Count: 1}, {City: "台北", Hospital: "臺大醫院", Count: 1}}, got)
 }
 
 func TestSearchPaginationStable(t *testing.T) {

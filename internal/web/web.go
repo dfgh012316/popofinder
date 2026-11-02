@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,11 +40,40 @@ const (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+// funcs are the template helpers: numbers with thousands separators and the
+// coverage bars' widths.
+var funcs = template.FuncMap{
+	"comma": func(n int) string {
+		s := strconv.Itoa(n)
+		for i := len(s) - 3; i > 0; i -= 3 {
+			s = s[:i] + "," + s[i:]
+		}
+		return s
+	},
+	"minus": func(a, b int) int { return a - b },
+	// maxCity is the largest city total, the full width of a bar.
+	"maxCity": func(c *coverage) int {
+		m := 0
+		for _, r := range c.Regions {
+			for _, x := range r.Cities {
+				m = max(m, x.Total)
+			}
+		}
+		return m
+	},
+	"pct": func(n, of int) string {
+		if of <= 0 {
+			return "0%"
+		}
+		return strconv.FormatFloat(float64(n)*100/float64(of), 'f', 2, 64) + "%"
+	},
+}
+
 // pages holds one template set per page, each the layout plus that page's content.
 var pages = func() map[string]*template.Template {
 	m := map[string]*template.Template{}
 	for _, name := range []string{"home", "results", "hospitals", "report", "message"} {
-		m[name] = template.Must(template.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
+		m[name] = template.Must(template.New(name).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
 	}
 	return m
 }()
@@ -52,7 +82,9 @@ var pages = func() map[string]*template.Template {
 type store interface {
 	Search(criteria search.Criteria, offset int) ([]database.MedicalPersonnel, database.SearchStats, error)
 	LogSearch(ctx context.Context, criteria search.Criteria, resultCount int, channel string) error
+	SearchFacets(ctx context.Context, criteria search.Criteria) ([]database.Facet, error)
 	DirectoryHospitals(ctx context.Context) ([]database.DirectoryHospital, error)
+	CityCounts(ctx context.Context) ([]database.CityCount, error)
 }
 
 var _ store = (*database.Repository)(nil)
@@ -99,52 +131,167 @@ type page struct {
 	JSONLD      template.JS
 	Content     any
 
+	Nav string // the header link of this page: "hospitals", "report" or ""
+
 	// Set by render.
-	HeadTitle, OGImage, LineURL string
+	HeadTitle, OGImage, LineURL, RepoURL string
+	HeaderSearch                         bool // every page but home has the search box in the header
 }
 
 // example is a search shown on the home page, the same kinds as the help card's.
 type example struct{ Query, Note string }
 
 var examples = []example{
+	{"三總 牙科", "醫院簡稱加科別"},
+	{"林長 心臟", "林口長庚的心臟科"},
+	{"高雄 皮膚", "縣市加科別"},
 	{"陳", "姓名、醫院或科別含「陳」"},
-	{"三總 牙科", "三總的牙科醫師"},
-	{"台北 牙科", "台北的牙科醫師，縣市可以放在任何位置"},
-	{"台北@醫院 三總", "只比對醫院名稱"},
-	{"台北@科別 心臟", "只比對科別，打部分字即可"},
 }
 
 func (h *Handler) home(w http.ResponseWriter, r *http.Request) {
+	cov, hs, err := h.loadCoverage(r.Context())
+	if err != nil {
+		// The search form still works without the numbers.
+		slog.Error("web home coverage", "err", err)
+	}
+	names := make([]string, len(hs))
+	for i, x := range hs {
+		names[i] = x.Hospital
+	}
 	render(w, http.StatusOK, "home", page{Canonical: siteURL + "/", JSONLD: homeJSONLD, Content: struct {
-		Coverage    string
-		Examples    []example
-		LineURL     string
-		Differences []point
-		FAQs        any
-	}{linetemplate.CoverageText, examples, lineAddURL, differences, faqs}})
+		Coverage     string
+		Examples     []example
+		Regions      []region
+		HospitalList []string
+		Stats        *coverage
+		LineURL      string
+		Differences  []point
+		FAQs         any
+	}{linetemplate.CoverageText, examples, regions, names, cov, lineAddURL, differences, faqs}})
 }
 
 type resultCard struct {
 	linetemplate.Card
+	EducationLines      []string
+	EducationLabel      string
+	SourceLabel         string
 	SameDepartmentLabel string
 	SourceLinkLabel     string
 }
 
 type results struct {
-	Query    string
-	Summary  string
-	Cards    []resultCard
-	NoResult string
-	PrevPage int // 0 when there is none
-	NextPage int // 0 when there is none
-	Capped   bool
-	CappedAt int
+	Query       string
+	Heading     string   // the summary's first line
+	SummaryRest []string // its other lines
+	Cards       []resultCard
+	NoResult    string
+	Facets      facets
+	PrevPage    int // 0 when there is none
+	NextPage    int // 0 when there is none
+	Page        int
+	TotalPages  int
+	Capped      bool
+	CappedAt    int
+}
+
+// facetLink adds words to the current search.
+type facetLink struct {
+	Label, Note, Query string
+	Count              int
+}
+
+type facets struct {
+	Cities, Hospitals []facetLink
+}
+
+// maxHospitalFacets is how many hospitals a wide search offers to narrow to.
+const maxHospitalFacets = 8
+
+// buildFacets offers the cities and hospitals of a wide search's matches as words
+// to add. Only for keyword searches: in an @醫院 or @科別 search an added word is
+// read as another hospital or department, not a city. A facet that would not
+// narrow the search (a single city or hospital) is left out.
+func buildFacets(q string, criteria search.Criteria, fs []database.Facet) facets {
+	var out facets
+	if criteria.SearchType != search.TypeAll {
+		return out
+	}
+	byCity := map[string]int{}
+	var cities []string
+	for _, f := range fs {
+		if _, ok := byCity[f.City]; !ok {
+			cities = append(cities, f.City)
+		}
+		byCity[f.City] += f.Count
+	}
+	if criteria.City == nil && len(cities) > 1 {
+		for _, c := range cities {
+			out.Cities = append(out.Cities, facetLink{Label: c, Query: q + " " + c, Count: byCity[c]})
+		}
+		slices.SortStableFunc(out.Cities, func(a, b facetLink) int { return b.Count - a.Count })
+	}
+	if len(fs) > 1 {
+		for _, f := range fs[:min(len(fs), maxHospitalFacets)] {
+			// The city too, unless the search has one: 國泰綜合醫院 is also part of
+			// 汐止國泰綜合醫院. A second city word would be read as a keyword.
+			add := f.City + " " + f.Hospital
+			if criteria.City != nil {
+				add = f.Hospital
+			}
+			out.Hospitals = append(out.Hospitals, facetLink{Label: f.Hospital, Note: f.City, Query: q + " " + add, Count: f.Count})
+		}
+	}
+	return out
+}
+
+// composeQuery turns the home page's search form into one search text, written the
+// way ParseCriteria reads it; ok is false when the form sent no separate field.
+//   - The city goes first: in an @醫院 or @科別 search a later city word is read as
+//     part of the hospital or department, and in any search only the first city
+//     word is the city (a second one is a keyword every result must contain). A
+//     city typed in the box wins over the city field.
+//   - The hospital and department fields are words every result must match, so with
+//     either one the search is a keyword search: an @ search matches one column
+//     only, and 「@醫院 三總」 with 科別 心臟 would look for 心臟 in hospital names.
+//   - Otherwise an @醫院 or @科別 search keeps its mode.
+func composeQuery(v url.Values) (q string, ok bool) {
+	typed := strings.TrimSpace(v.Get("q"))
+	city := strings.TrimSpace(v.Get("city"))
+	var fields []string
+	for _, k := range []string{"hospital", "dept"} {
+		if x := strings.TrimSpace(v.Get(k)); x != "" {
+			fields = append(fields, x)
+		}
+	}
+	if city == "" && len(fields) == 0 {
+		return typed, false
+	}
+	c := search.ParseCriteria(typed)
+	if c.City != nil {
+		city = *c.City
+	}
+	mode := ""
+	if len(fields) == 0 {
+		mode = map[search.SearchType]string{search.TypeHospital: "@醫院", search.TypeDepartment: "@科別"}[c.SearchType]
+	}
+	var words []string
+	for _, w := range append([]string{city, mode, c.SearchTerm}, fields...) {
+		if w != "" {
+			words = append(words, w)
+		}
+	}
+	return strings.Join(words, " "), true
 }
 
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	q, composed := composeQuery(r.URL.Query())
 	if q == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if composed {
+		// One search text, so paging, facets and the log work as for a typed search.
+		http.Redirect(w, r, "/search?q="+url.QueryEscape(q), http.StatusSeeOther)
 		return
 	}
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
@@ -189,13 +336,26 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res := results{Query: q, Summary: linetemplate.SearchSummary(criteria, stats), CappedAt: maxPages * database.PageSize}
+	summary := strings.Split(linetemplate.SearchSummary(criteria, stats), "\n")
+	res := results{Query: q, Heading: summary[0], SummaryRest: summary[1:], Page: pageNo,
+		TotalPages: min(stats.TotalPages, maxPages), CappedAt: maxPages * database.PageSize}
 	for _, person := range personnel {
+		card := linetemplate.NewCard(person)
 		res.Cards = append(res.Cards, resultCard{
-			Card:                linetemplate.NewCard(person),
+			Card:                card,
+			EducationLines:      strings.Split(card.Education, "；"),
+			EducationLabel:      linetemplate.EducationLabel,
+			SourceLabel:         linetemplate.SourceLabel,
 			SameDepartmentLabel: linetemplate.SameDepartmentLabel,
 			SourceLinkLabel:     linetemplate.SourceLinkLabel,
 		})
+	}
+	if stats.TotalCount > database.PageSize {
+		fs, err := h.store.SearchFacets(r.Context(), criteria)
+		if err != nil {
+			slog.Error("web search facets", "err", err)
+		}
+		res.Facets = buildFacets(q, criteria, fs)
 	}
 	if len(personnel) == 0 {
 		res.NoResult = linetemplate.NoResultsText
@@ -214,37 +374,118 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 	render(w, http.StatusOK, "results", p)
 }
 
-type hospitalLink struct {
-	Label, Query string
+// region groups cities as the 國發會 does; every search city is in one region.
+type region struct {
+	Name, ID string
+	Cities   []string
+}
+
+var regions = []region{
+	{"北部", "north", []string{"台北", "新北", "基隆", "桃園", "新竹", "宜蘭"}},
+	{"中部", "central", []string{"苗栗", "台中", "彰化", "南投", "雲林"}},
+	{"南部", "south", []string{"嘉義", "台南", "高雄", "屏東"}},
+	{"東部", "east", []string{"花蓮", "台東"}},
+}
+
+type coverageHospital struct {
+	Name, Query, CheckedOn string
+	Count                  int
+}
+
+type coverageCity struct {
+	City                string
+	Total, Official     int
+	Hospitals           []coverageHospital
+	OfficialHospitalCnt int
+}
+
+type coverageRegion struct {
+	Name, ID string
+	Total    int
+	Cities   []coverageCity
+}
+
+// coverage is what the home page and /hospitals say is listed.
+type coverage struct {
+	Total, Official, Hospitals int
+	CheckedOn                  string // the latest date any official directory was read
+	Regions                    []coverageRegion
+}
+
+// loadCoverage counts the listed doctors by region and city, with each city's
+// hospitals whose official directories are crawled.
+func (h *Handler) loadCoverage(ctx context.Context) (*coverage, []database.DirectoryHospital, error) {
+	cs, err := h.store.CityCounts(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	hs, err := h.store.DirectoryHospitals(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	counts := map[string]database.CityCount{}
+	cov := &coverage{Hospitals: len(hs)}
+	for _, c := range cs {
+		counts[c.City] = c
+		cov.Total += c.Total
+		cov.Official += c.Official
+	}
+	byCity := map[string][]coverageHospital{}
+	for _, x := range hs {
+		checked := ""
+		if x.CheckedAt.Valid {
+			checked = x.CheckedAt.Time.Format("2006-01-02")
+			cov.CheckedOn = max(cov.CheckedOn, checked)
+		}
+		byCity[x.City] = append(byCity[x.City], coverageHospital{
+			Name: x.Hospital, Query: linetemplate.HospitalSearchText(x), CheckedOn: checked, Count: x.Count,
+		})
+	}
+	for _, g := range regions {
+		cr := coverageRegion{Name: g.Name, ID: g.ID}
+		for _, city := range g.Cities {
+			c := counts[city]
+			cr.Total += c.Total
+			cr.Cities = append(cr.Cities, coverageCity{City: city, Total: c.Total, Official: c.Official,
+				Hospitals: byCity[city], OfficialHospitalCnt: len(byCity[city])})
+		}
+		cov.Regions = append(cov.Regions, cr)
+	}
+	return cov, hs, nil
 }
 
 func (h *Handler) hospitals(w http.ResponseWriter, r *http.Request) {
-	hs, err := h.store.DirectoryHospitals(r.Context())
+	cov, _, err := h.loadCoverage(r.Context())
 	if err != nil {
 		slog.Error("web hospitals", "err", err)
 		render(w, http.StatusInternalServerError, "message", page{Content: "讀取失敗，請稍後再試。"})
 		return
 	}
-	links := make([]hospitalLink, len(hs))
-	for i, x := range hs {
-		links[i] = hospitalLink{Label: x.Hospital + " " + strconv.Itoa(x.Count) + " 位", Query: linetemplate.HospitalSearchText(x)}
-	}
-	render(w, http.StatusOK, "hospitals", page{Title: "醫院清單", Canonical: siteURL + "/hospitals",
-		Description: "收錄了官網醫師名單的醫院與人數，點醫院名稱即可查詢該院醫師的學歷。", Content: struct {
-			Links []hospitalLink
+	render(w, http.StatusOK, "hospitals", page{Title: "收錄範圍", Nav: "hospitals", Canonical: siteURL + "/hospitals",
+		Description: "各縣市收錄的醫師人數，以及已收錄官網完整醫師名單的醫院與查到日期。", Content: struct {
+			Stats *coverage
 			Note  string
-		}{links, linetemplate.HospitalListNote}})
+		}{cov, linetemplate.HospitalListNote}})
 }
 
 func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
-	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Canonical: siteURL + "/report",
+	render(w, http.StatusOK, "report", page{Title: "補充、更正與下架", Nav: "report", Canonical: siteURL + "/report",
 		Description: "醫師或院所補充學歷、更正資料或要求下架的方式。", Content: struct {
-			Text, Email string
-		}{linetemplate.ReportText, linetemplate.ContactEmail}})
+			Paragraphs            []string
+			Email, AddURL, FixURL string
+		}{strings.Split(linetemplate.ReportText, "\n\n"), linetemplate.ContactEmail,
+			mailto("補充醫師學歷"), mailto("更正或下架")}})
+}
+
+// mailto is a link that writes to the contact address with subject filled in.
+func mailto(subject string) string {
+	return "mailto:" + linetemplate.ContactEmail + "?subject=" + url.PathEscape(subject)
 }
 
 func render(w http.ResponseWriter, status int, name string, p page) {
 	p.LineURL = lineAddURL
+	p.RepoURL = repoURL
+	p.HeaderSearch = name != "home"
 	p.OGImage = siteURL + "/og.png"
 	if p.Description == "" {
 		p.Description = siteDescription

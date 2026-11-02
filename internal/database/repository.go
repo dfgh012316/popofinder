@@ -59,9 +59,10 @@ type SearchStats struct {
 // DirectoryHospital is one hospital whose official doctor directory is crawled
 // (source = 'hospital_directory'), with how many doctors it contributes.
 type DirectoryHospital struct {
-	City     string `db:"city"`
-	Hospital string `db:"hospital"`
-	Count    int    `db:"count"`
+	City      string       `db:"city"`
+	Hospital  string       `db:"hospital"`
+	Count     int          `db:"count"`
+	CheckedAt sql.NullTime `db:"checked_at"` // the latest source_checked_at
 }
 
 type Repository struct {
@@ -83,47 +84,7 @@ func (r *Repository) Ping(ctx context.Context) error {
 // name contains any of search.HospitalPatterns(term). TypeAll rows are ranked 0 when a
 // term matches the name, 1 when one matches the hospital, else 2 (department only).
 func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPersonnel, SearchStats, error) {
-	var args []any
-	ilike := func(col, s string) string {
-		args = append(args, "%"+s+"%")
-		return fmt.Sprintf("%s ILIKE $%d", col, len(args))
-	}
-	hospitalMatch := func(term string) string {
-		var ors []string
-		for _, p := range search.HospitalPatterns(term) {
-			ors = append(ors, ilike(hospitalMatchCol, p))
-		}
-		return "(" + strings.Join(ors, " OR ") + ")"
-	}
-
-	var whereClauses, nameMatches, hospitalMatches []string
-	for _, t := range criteria.Terms() {
-		switch criteria.SearchType {
-		case search.TypeAll:
-			name, hospital := ilike(nameMatchCol, t), hospitalMatch(t)
-			nameMatches = append(nameMatches, name)
-			hospitalMatches = append(hospitalMatches, hospital)
-			whereClauses = append(whereClauses, "("+name+" OR "+hospital+" OR "+ilike(departmentMatchCol, t)+")")
-		case search.TypeHospital:
-			whereClauses = append(whereClauses, hospitalMatch(t))
-		case search.TypeDepartment:
-			whereClauses = append(whereClauses, ilike(departmentMatchCol, t))
-		}
-	}
-	matchRankExpr := "0"
-	if criteria.SearchType == search.TypeAll {
-		matchRankExpr = "CASE WHEN " + strings.Join(nameMatches, " OR ") + " THEN 0 WHEN " + strings.Join(hospitalMatches, " OR ") + " THEN 1 ELSE 2 END"
-	}
-
-	if criteria.City != nil {
-		args = append(args, *criteria.City)
-		whereClauses = append(whereClauses, fmt.Sprintf("city = $%d", len(args)))
-	}
-
-	where := ""
-	if len(whereClauses) > 0 {
-		where = "WHERE " + strings.Join(whereClauses, " AND ")
-	}
+	where, args, matchRankExpr := searchFilter(criteria)
 
 	// Count query
 	countSQL := fmt.Sprintf(
@@ -176,6 +137,94 @@ func (r *Repository) Search(criteria search.Criteria, offset int) ([]MedicalPers
 	return records, stats, nil
 }
 
+// searchFilter builds the WHERE clause (with its args) for criteria, and for
+// search.TypeAll the rank expression: 0 when any word matches the name, 1 the
+// hospital, 2 otherwise. Search and SearchFacets use the same filter.
+func searchFilter(criteria search.Criteria) (where string, args []any, matchRankExpr string) {
+	ilike := func(col, s string) string {
+		args = append(args, "%"+s+"%")
+		return fmt.Sprintf("%s ILIKE $%d", col, len(args))
+	}
+	hospitalMatch := func(term string) string {
+		var ors []string
+		for _, p := range search.HospitalPatterns(term) {
+			ors = append(ors, ilike(hospitalMatchCol, p))
+		}
+		return "(" + strings.Join(ors, " OR ") + ")"
+	}
+
+	var whereClauses, nameMatches, hospitalMatches []string
+	for _, t := range criteria.Terms() {
+		switch criteria.SearchType {
+		case search.TypeAll:
+			name, hospital := ilike(nameMatchCol, t), hospitalMatch(t)
+			nameMatches = append(nameMatches, name)
+			hospitalMatches = append(hospitalMatches, hospital)
+			whereClauses = append(whereClauses, "("+name+" OR "+hospital+" OR "+ilike(departmentMatchCol, t)+")")
+		case search.TypeHospital:
+			whereClauses = append(whereClauses, hospitalMatch(t))
+		case search.TypeDepartment:
+			whereClauses = append(whereClauses, ilike(departmentMatchCol, t))
+		}
+	}
+	matchRankExpr = "0"
+	if criteria.SearchType == search.TypeAll {
+		matchRankExpr = "CASE WHEN " + strings.Join(nameMatches, " OR ") + " THEN 0 WHEN " + strings.Join(hospitalMatches, " OR ") + " THEN 1 ELSE 2 END"
+	}
+
+	if criteria.City != nil {
+		args = append(args, *criteria.City)
+		whereClauses = append(whereClauses, fmt.Sprintf("city = $%d", len(args)))
+	}
+
+	if len(whereClauses) > 0 {
+		where = "WHERE " + strings.Join(whereClauses, " AND ")
+	}
+	return where, args, matchRankExpr
+}
+
+// Facet is how many of a search's matches are at one hospital in one city.
+type Facet struct {
+	City     string `db:"city"`
+	Hospital string `db:"hospital"`
+	Count    int    `db:"count"`
+}
+
+// SearchFacets counts the matches of criteria by city and hospital, most first, so
+// a wide search can be narrowed (web version, OD-17).
+func (r *Repository) SearchFacets(ctx context.Context, criteria search.Criteria) ([]Facet, error) {
+	where, args, _ := searchFilter(criteria)
+	var fs []Facet
+	err := r.db.SelectContext(ctx, &fs,
+		"SELECT city, hospital, COUNT(*) AS count FROM medical_personnel "+where+" GROUP BY city, hospital ORDER BY count DESC, city, hospital",
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: search facets: %w", err)
+	}
+	return fs, nil
+}
+
+// CityCount is how many doctors are listed in one city, and how many of them come
+// from official hospital directories.
+type CityCount struct {
+	City     string `db:"city"`
+	Total    int    `db:"total"`
+	Official int    `db:"official"`
+}
+
+// CityCounts lists every city with listed doctors, most first.
+func (r *Repository) CityCounts(ctx context.Context) ([]CityCount, error) {
+	var cs []CityCount
+	err := r.db.SelectContext(ctx, &cs,
+		"SELECT city, COUNT(*) AS total, COUNT(*) FILTER (WHERE source = 'hospital_directory') AS official FROM medical_personnel WHERE city <> '' GROUP BY city ORDER BY total DESC, city",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: city counts: %w", err)
+	}
+	return cs, nil
+}
+
 // Where a search came from, for search_log.channel (OD-17).
 const (
 	ChannelLINE = "line"
@@ -199,7 +248,7 @@ func (r *Repository) LogSearch(ctx context.Context, criteria search.Criteria, re
 func (r *Repository) DirectoryHospitals(ctx context.Context) ([]DirectoryHospital, error) {
 	var hs []DirectoryHospital
 	err := r.db.SelectContext(ctx, &hs,
-		"SELECT city, hospital, COUNT(*) AS count FROM medical_personnel WHERE source = 'hospital_directory' GROUP BY city, hospital ORDER BY count DESC, hospital",
+		"SELECT city, hospital, COUNT(*) AS count, MAX(source_checked_at) AS checked_at FROM medical_personnel WHERE source = 'hospital_directory' GROUP BY city, hospital ORDER BY count DESC, hospital",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: directory hospitals: %w", err)

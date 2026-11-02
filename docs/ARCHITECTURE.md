@@ -2,6 +2,13 @@
 
 ## Recent Architectural Decisions
 
+### 2026-11-02 — 網頁版改版（查詢表單、收錄範圍、縮小範圍）
+- `database.searchFilter(criteria)`：從 `Search` 抽出的 WHERE、參數與 `TypeAll` 排名運算式；`Search` 與新的 `SearchFacets`（依 `city, hospital` 計數）共用。新的 `CityCounts`（各縣市總數與官網名單人數，略過空縣市）；`DirectoryHospital` 加 `CheckedAt`（`MAX(source_checked_at)`，LINE 醫院清單不用）。
+- `template.Card` 改為具名欄位（`City`、`Hospital`、`Department`、`Education`、`Source`）＋`Rows()`（LINE bubble 用，輸出不變）；標籤常數 `CityLabel`…`SourceLabel`。
+- `internal/web`：`store` 多 `SearchFacets`、`CityCounts`；`composeQuery`（表單欄位 `hospital`、`dept`、`city` 組成查詢後 303 轉址）、`buildFacets`、`regions`（北中南東，`TestRegionsCoverEveryCity` 確認 17 縣市各在一區）、`loadCoverage`（首頁與 `/hospitals` 共用；首頁讀取失敗時只是不顯示收錄範圍）。範本 helper `comma`、`pct`、`minus`、`maxCity`。`page` 加 `Nav`、`HeaderSearch`（首頁以外的頁首有查詢框）、`RepoURL`。補充與更正頁的寄信按鈕帶主旨（`mailto`）。
+- 版面全部在 `templates/layout.html` 的 CSS token（紙、墨、鋼筆藍、螢光筆只用在焦點與目前位置；長條兩段是同一個藍的深淺兩階，淺色與深色模式都過 dataviz 的 ordinal 檢查）。結果頁在 960px 以上是兩欄（縮小範圍在右側 sticky），以下縮小範圍排在結果前、每組一行可橫向滑動。
+- 測試：`TestHomeShowsCoverage`、`TestHomeWorksWithoutCoverage`、`TestSearchComposesFormFields`、`TestSearchOffersFacets`、`TestBuildFacets`、`TestRegionsCoverEveryCity`；整合測試 `TestCityCounts`、`TestSearchFacetsUseTheSearchFilter`（加總等於 `Search` 的總數）、`TestDirectoryHospitals` 加查到日期。`TestHeadUsesGetRoutes` 改用不需要 DB 的頁面（首頁現在會查 DB）。
+
 ### 2026-11-02 — 官網爬蟲：中榮（`vghtc`）
 - 新 `Source` `Vghtc`（`vghtc:<drno>`），註冊進 `cmd/crawl`：`listSection.jsp` → `regDoctor.jsp?init=sub&section=…` → `regDocSchedule.jsp?init=init&section=…&drno=…`。`parseVghtcDepts` 依 `<th>` 分組，把「特別門診」組（`vghtcSpecialGroup`）移到最後；`parseVghtcDoctors` 讀 `showDoc('<id>',` 去重；`parseVghtcProfile` 讀 `doctorChineseName` 與 `<h5>學歷</h5>` 後的 `<p>`（`htmlLines`）。縣市「台中」、醫院「臺中榮民總醫院」。任一頁失敗就失敗。
 - 測試：`internal/crawl/vghtc_test.go`（合成 fixture `testdata/vghtc/`，虛構姓名）；live test `TestVghtcLive`（最多 6 個請求）。

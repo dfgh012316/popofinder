@@ -27,27 +27,45 @@ type CardRow struct {
 	Wrap         bool // the LINE card wraps long values instead of cutting them off
 }
 
+// The labels of a doctor card's fields.
+const (
+	CityLabel       = "縣市"
+	HospitalLabel   = "醫院"
+	DepartmentLabel = "科別"
+	EducationLabel  = "學歷"
+	SourceLabel     = "資料來源"
+)
+
 // Card is what a doctor card shows. The LINE bubble and the web page (OD-17) both
 // render it, so the two show the same fields with the same labels.
 type Card struct {
-	Name               string
-	Rows               []CardRow
-	SourceURL          string // "" when there is no source link
-	SourceURLText      string
-	SameDepartmentText string // what 「同院同科醫師」 searches; "" when there is no button
+	Name                                          string
+	City, Hospital, Department, Education, Source string
+	SourceURL                                     string // "" when there is no source link
+	SourceURLText                                 string
+	SameDepartmentText                            string // what 「同院同科醫師」 searches; "" when there is no button
+}
+
+// Rows is the card's fields in LINE order, labelled.
+func (c Card) Rows() []CardRow {
+	return []CardRow{
+		{Label: CityLabel, Value: c.City},
+		{Label: HospitalLabel, Value: c.Hospital, Wrap: true},
+		{Label: DepartmentLabel, Value: c.Department},
+		{Label: EducationLabel, Value: c.Education, Wrap: true},
+		{Label: SourceLabel, Value: c.Source, Wrap: true},
+	}
 }
 
 // NewCard builds the card for one doctor.
 func NewCard(p database.MedicalPersonnel) Card {
 	c := Card{
-		Name: p.Name,
-		Rows: []CardRow{
-			{Label: "縣市", Value: strVal(p.City)},
-			{Label: "醫院", Value: strVal(p.Hospital), Wrap: true},
-			{Label: "科別", Value: strOrDefault(p.Department)},
-			{Label: "學歷", Value: strOrDefault(p.Education), Wrap: true},
-			{Label: "資料來源", Value: sourceLabel(p.Source), Wrap: true},
-		},
+		Name:               p.Name,
+		City:               strVal(p.City),
+		Hospital:           strVal(p.Hospital),
+		Department:         strOrDefault(p.Department),
+		Education:          strOrDefault(p.Education),
+		Source:             sourceLabel(p.Source),
 		SameDepartmentText: sameDepartmentSearchText(p),
 	}
 	if p.SourceURL.Valid && p.SourceURL.String != "" {
@@ -138,7 +156,7 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 
 	c := NewCard(p)
 	var bodyContents []any
-	for i, r := range c.Rows {
+	for i, r := range c.Rows() {
 		var extra map[string]any
 		if r.Wrap {
 			extra = map[string]any{"wrap": true}
