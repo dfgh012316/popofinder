@@ -5,7 +5,7 @@
 ### 2026-11-03 — 官網的專長與經歷（OD-18）
 - migration 0009：`medical_personnel.specialty`、`experience`（`VARCHAR(500)`，NULL 為沒有）。歷史表存整列 JSONB，不用改；`selectColumns`、`MedicalPersonnel`、`crawl.ExistingRow`、`LoadCrawlState`、`ApplyCrawlPlan` 的 INSERT／UPDATE 都帶這兩欄，`sameRow` 也比對。
 - `crawl.Doctor` 加 `Specialty`、`Experience`；`detailFields{specialty, experience}`（每個來源一組 regexp，`nil` 表示該站沒有）與 `sectionLines`（`htmlLines` 再去掉行首的「•」等項目符號）。各來源的 `<src>Details` 在 profile 解析之後讀，蒔美只有專長，長庚只有經歷，小港沒有。`formatLines(lines, maxDetailRunes)` 以「；」串接、超過時整行捨去（學歷的 `formatEducation` 不變，仍是截斷）。
-- `template.Card` 加 `Specialty`、`Experience`、`ExperienceHead()`／`ExperienceRest()`（`ExperienceShown` = 3）；標籤 `SpecialtyLabel`、`ExperienceLabel`。LINE bubble 的學歷、專長、經歷各是一個以 `\n` 串接的 text（每行一個 text 會讓十張卡片超過 50 KB），專長 `cut` 到 80 字、經歷每行 40 字並加「另有 N 項」；`TestDoctorsFlexMessageSize` 守住 bubble 30 KB、carousel 50 KB。網頁版 `.detail` 區塊，經歷其餘的行放 `<details>`。
+- `template.Card` 加 `Specialty`、`Experience`、`ExperienceHead()`／`ExperienceRest()`（`ExperienceShown` = 3）；標籤 `SpecialtyLabel`、`ExperienceLabel`。LINE bubble 的學歷、專長、經歷各是一個以 `\n` 串接的 text（每行一個 text 會讓十張卡片超過 50 KB），專長 `cut` 到 80 字、經歷每行 40 字並加灰色的「另有 N 項，按「查看來源」看全部」；`TestDoctorsFlexMessageSize` 守住 bubble 30 KB、carousel 50 KB。網頁版 `.detail` 區塊，經歷其餘的行放 `<details>`。
 - 測試：`TestDetailFields`（8 個來源的合成 fixture 補上專長／經歷段落）、`TestDetailFieldsMissing`、`TestFormatLines`、各來源 Crawl 測試檢查欄位有接上、`TestBuildSyncPlanComparesSpecialtyAndExperience`；整合測試 `TestApplyCrawlPlanWritesSpecialtyAndExperience`；`TestDoctorBubbleSpecialtyAndExperience`、`TestSearchCardShowsSpecialtyAndExperience`。
 
 ### 2026-11-03 — 網頁版第二次改版、LINE 卡片改版

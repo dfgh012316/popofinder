@@ -215,10 +215,11 @@ func doctorBubble(p database.MedicalPersonnel) map[string]any {
 	for _, l := range c.ExperienceHead() {
 		experience = append(experience, cut(l, lineExperienceRunes))
 	}
-	if rest := len(c.ExperienceRest()); rest > 0 {
-		experience = append(experience, fmt.Sprintf("另有 %d 項", rest))
-	}
 	detail(ExperienceLabel, experience)
+	if rest := len(c.ExperienceRest()); rest > 0 {
+		// Muted, so it does not read as one more line of 經歷.
+		body = append(body, text(fmt.Sprintf("另有 %d 項，按「%s」看全部", rest, SourceLinkLabel), map[string]any{"size": "xxs", "color": mutedColor}))
+	}
 	body = append(body, text(c.SourceNote(), map[string]any{"size": "xxs", "color": mutedColor, "margin": "lg"}))
 
 	bubble := map[string]any{
