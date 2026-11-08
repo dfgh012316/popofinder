@@ -36,7 +36,8 @@ const (
 	// lineAddURL adds the LINE bot as a friend.
 	lineAddURL = "https://lin.ee/h1GxF9s"
 	// donateURL is the ECPay donation page, shared with 國會在幹嘛 (OD-20). Linked
-	// only from the footer and /about#support, after the rules.
+	// from the support card above the footer (every page but /about) and from
+	// /about#support, always after the rules.
 	donateURL = "https://p.ecpay.com.tw/6D8D974"
 )
 
@@ -141,8 +142,8 @@ type page struct {
 	CopyScript bool // the page has a 「複製 Email」 button and loads /copy.js
 
 	// Set by render.
-	HeadTitle, OGImage, LineURL, RepoURL string
-	HeaderSearch                         bool // every page but home has the search box in the header
+	HeadTitle, OGImage, LineURL, RepoURL, DonateURL string
+	HeaderSearch                                    bool // every page but home has the search box in the header
 }
 
 // example is a search shown on the home page, the same kinds as the help card's.
@@ -503,6 +504,7 @@ func mailto(subject string) string {
 
 func render(w http.ResponseWriter, status int, name string, p page) {
 	p.LineURL = lineAddURL
+	p.DonateURL = donateURL
 	p.RepoURL = repoURL
 	p.HeaderSearch = name != "home"
 	p.OGImage = siteURL + "/og.png"
