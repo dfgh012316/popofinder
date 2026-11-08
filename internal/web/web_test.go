@@ -467,6 +467,17 @@ func TestAboutSEO(t *testing.T) {
 	}
 }
 
+// Donations (OD-20): every page's footer links to /about#support, which states
+// that donating changes nothing about coverage or takedowns before linking to ECPay.
+func TestSupportSection(t *testing.T) {
+	require.Contains(t, serve(t, New(&fakeStore{}), "/").Body.String(), `<a href="/about#support">支持這個網站</a>`)
+	body := serve(t, New(&fakeStore{}), "/about").Body.String()
+	require.Contains(t, body, `<h2 id="support">支持這個網站</h2>`)
+	require.Contains(t, body, "贊助換不到任何東西")
+	require.Contains(t, body, `<a href="`+donateURL+`" rel="noopener">到綠界贊助</a>`)
+	require.Less(t, strings.Index(body, "贊助換不到任何東西"), strings.Index(body, donateURL), "the rules come before the link")
+}
+
 func TestSearchHasNoCanonicalOrJSONLD(t *testing.T) {
 	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
 	body := serve(t, New(f), "/search?q=陳").Body.String()
