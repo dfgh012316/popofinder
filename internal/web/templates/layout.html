@@ -191,6 +191,14 @@ main{flex:1;padding:24px 0 48px}
 .mail{margin:10px 0 0;font-size:13px;color:var(--muted);-webkit-user-select:all;user-select:all;overflow-wrap:anywhere}
 .message{padding:24px 0;font-size:18px}
 
+/* Support card above the footer on every page but /about (OD-20). */
+.support{padding:0 0 32px}
+.support-card{max-width:46rem;background:var(--surface);border:1px solid var(--rule);border-radius:16px;box-shadow:var(--shadow);padding:18px 20px}
+.support-card p{margin:0 0 6px;color:var(--ink-2)}
+.support-card .support-title{font-weight:700;font-size:18px;color:var(--ink)}
+.support-card .support-note{font-size:14px;color:var(--muted)}
+.support-card .actions{margin-top:14px}
+
 footer{border-top:1px solid var(--rule);background:var(--surface);color:var(--muted);font-size:14px;padding:20px 0 32px}
 footer nav{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:8px}
 footer a{color:var(--ink-2)}
@@ -215,8 +223,14 @@ footer a{color:var(--ink-2)}
 <main id="main"><div class="wrap">
 {{template "content" .Content}}
 </div></main>
-<footer><div class="wrap">
-<nav aria-label="頁尾"><a href="/">查詢</a><a href="/hospitals">收錄範圍</a><a href="/about">關於與常見問題</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a><a href="{{.RepoURL}}" rel="noopener">程式碼</a><a href="/about#support">支持這個網站</a></nav>
+{{if ne .Nav "about"}}<aside class="support" aria-label="支持這個網站"><div class="wrap"><div class="support-card">
+<p class="support-title">支持 POPO Finder</p>
+<p>這個網站免費、不放廣告。覺得有用的話，歡迎贊助開發與營運。</p>
+<p class="support-note">贊助換不到任何東西：收錄、排序、更正與下架都和贊助無關。</p>
+<div class="actions"><a href="{{.DonateURL}}" rel="noopener">到綠界贊助</a><a class="quiet" href="/about#support">贊助規則</a></div>
+</div></div></aside>
+{{end}}<footer><div class="wrap">
+<nav aria-label="頁尾"><a href="/">查詢</a><a href="/hospitals">收錄範圍</a><a href="/about">關於與常見問題</a><a href="/report">補充、更正與下架</a><a href="{{.LineURL}}" rel="noopener">加入 LINE 版</a><a href="{{.RepoURL}}" rel="noopener">程式碼</a></nav>
 <div>只呈現公開的學歷事實，不評價任何醫師。</div>
 </div></footer>
 </body>

@@ -467,11 +467,20 @@ func TestAboutSEO(t *testing.T) {
 	}
 }
 
-// Donations (OD-20): every page's footer links to /about#support, which states
-// that donating changes nothing about coverage or takedowns before linking to ECPay.
+// Donations (OD-20): every page but /about ends with a support card that states
+// donating changes nothing about coverage or takedowns, links to ECPay and to the
+// rules at /about#support; /about has the full section instead of the card.
 func TestSupportSection(t *testing.T) {
-	require.Contains(t, serve(t, New(&fakeStore{}), "/").Body.String(), `<a href="/about#support">支持這個網站</a>`)
+	f := &fakeStore{stats: database.SearchStats{CurrentPage: 1}}
+	for _, target := range []string{"/", "/hospitals", "/report", "/search?q=" + url.QueryEscape("王")} {
+		card := serve(t, New(f), target).Body.String()
+		require.Contains(t, card, `<aside class="support" aria-label="支持這個網站">`, target)
+		require.Contains(t, card, "收錄、排序、更正與下架都和贊助無關", target)
+		require.Contains(t, card, `<a href="`+donateURL+`" rel="noopener">到綠界贊助</a>`, target)
+		require.Contains(t, card, `<a class="quiet" href="/about#support">贊助規則</a>`, target)
+	}
 	body := serve(t, New(&fakeStore{}), "/about").Body.String()
+	require.NotContains(t, body, `<aside class="support"`)
 	require.Contains(t, body, `<h2 id="support">支持這個網站</h2>`)
 	require.Contains(t, body, "贊助換不到任何東西")
 	require.Contains(t, body, `<a href="`+donateURL+`" rel="noopener">到綠界贊助</a>`)
