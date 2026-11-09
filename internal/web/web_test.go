@@ -485,6 +485,11 @@ func TestSupportSection(t *testing.T) {
 	require.Contains(t, body, "贊助換不到任何東西")
 	require.Contains(t, body, `<a href="`+donateURL+`" rel="noopener">到綠界贊助</a>`)
 	require.Less(t, strings.Index(body, "贊助換不到任何東西"), strings.Index(body, donateURL), "the rules come before the link")
+	// 綠界信用卡收款審核(2026-11-09):收費資訊與和綠界驗證相同的 Email,完整說明在送審的 jerrytech.me。
+	for _, want := range []string{"每筆最低新台幣 100 元", "7 天內來信", `<a href="https://jerrytech.me/support/">JerryTech 贊助與收費說明</a>`,
+		`<a href="mailto:jerrychuang@jerrytech.me">jerrychuang@jerrytech.me</a>`} {
+		require.Contains(t, body, want)
+	}
 }
 
 func TestSearchHasNoCanonicalOrJSONLD(t *testing.T) {
