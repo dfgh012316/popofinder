@@ -38,11 +38,11 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 	// Help command
 	lower := strings.ToLower(text)
 	if lower == helpCommand || lower == "help" {
-		helpMsg, err := template.HelpFlexMessage()
+		msgs, err := template.HelpMessages()
 		if err != nil {
 			return err
 		}
-		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{helpMsg})
+		return c.Reply(ctx, event.ReplyToken, msgs)
 	}
 
 	// Hospital list command (OD-12)
@@ -65,6 +65,15 @@ func (h *MessageHandler) Handle(ctx context.Context, event webhook.Event, c *cli
 			return err
 		}
 		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{reportMsg})
+	}
+
+	// How to support the service (OD-21)
+	if text == template.DonateCommand || lower == "donate" {
+		donateMsg, err := template.DonateTextMessage()
+		if err != nil {
+			return err
+		}
+		return c.Reply(ctx, event.ReplyToken, []json.RawMessage{donateMsg})
 	}
 
 	// Parse and execute search

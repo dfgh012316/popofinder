@@ -31,7 +31,7 @@ func TestRichMenuSendsCommands(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &menu))
 	require.LessOrEqual(t, utf8.RuneCountInString(menu.ChatBarText), 14, "LINE chat bar text limit")
 
-	commands := map[string]bool{helpCommand: true, template.HospitalListCommand: true, template.ReportCommand: true}
+	commands := map[string]bool{helpCommand: true, template.HospitalListCommand: true, template.ReportCommand: true, template.DonateCommand: true}
 	for _, a := range menu.Areas {
 		require.Equal(t, "message", a.Action.Type)
 		require.True(t, commands[a.Action.Text], "%q is not a command", a.Action.Text)

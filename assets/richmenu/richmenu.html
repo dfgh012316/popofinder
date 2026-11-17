@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Source of richmenu.png (docs/open-decisions.md OD-16). The three columns match the
+  Source of richmenu.png (docs/open-decisions.md OD-16). The four columns match the
   areas in richmenu.json. Render at 2500x843 with Noto Sans CJK TC installed:
     npx playwright screenshot --viewport-size=2500,843 assets/richmenu/richmenu.html assets/richmenu/richmenu.png
 -->
@@ -11,7 +11,7 @@
   html, body { margin: 0; width: 2500px; height: 843px; overflow: hidden; background: #ffffff; }
   body {
     display: grid;
-    grid-template-columns: 833px 834px 833px;
+    grid-template-columns: repeat(4, 625px);
     font-family: "Noto Sans CJK TC", "Noto Sans TC", sans-serif;
     border-top: 6px solid #1DB446;
     box-sizing: border-box;
@@ -25,16 +25,16 @@
     width: 3px; background: #e6e6e6;
   }
   .icon {
-    width: 260px; height: 260px; border-radius: 50%;
+    width: 220px; height: 220px; border-radius: 50%;
     background: #e8f7ec;
     display: flex; align-items: center; justify-content: center;
   }
   .icon svg {
-    width: 150px; height: 150px;
+    width: 128px; height: 128px;
     fill: none; stroke: #1DB446; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
   }
-  .label { margin-top: 44px; font-size: 108px; font-weight: 700; color: #222222; line-height: 1.15; }
-  .sub { margin-top: 14px; font-size: 64px; color: #777777; line-height: 1.2; }
+  .label { margin-top: 40px; font-size: 84px; font-weight: 700; color: #222222; line-height: 1.15; }
+  .sub { margin-top: 14px; font-size: 46px; color: #777777; line-height: 1.2; }
 </style>
 </head>
 <body>
@@ -70,6 +70,15 @@
     </div>
     <div class="label">補充與更正</div>
     <div class="sub">補學歷、更正、下架</div>
+  </div>
+  <div class="tile">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20.5s-8-4.6-8-10.4A4.6 4.6 0 0 1 12 7.4a4.6 4.6 0 0 1 8 2.7c0 5.8-8 10.4-8 10.4z"/>
+      </svg>
+    </div>
+    <div class="label">贊助</div>
+    <div class="sub">支持這個服務</div>
   </div>
 </body>
 </html>
