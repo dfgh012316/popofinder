@@ -476,15 +476,15 @@ func TestSupportSection(t *testing.T) {
 		card := serve(t, New(f), target).Body.String()
 		require.Contains(t, card, `<aside class="support" aria-label="支持這個網站">`, target)
 		require.Contains(t, card, "收錄、排序、更正與下架都和贊助無關", target)
-		require.Contains(t, card, `<a href="`+donateURL+`" rel="noopener">到綠界贊助</a>`, target)
+		require.Contains(t, card, `<a href="`+linetemplate.DonateURL+`" rel="noopener">到綠界贊助</a>`, target)
 		require.Contains(t, card, `<a class="quiet" href="/about#support">贊助規則</a>`, target)
 	}
 	body := serve(t, New(&fakeStore{}), "/about").Body.String()
 	require.NotContains(t, body, `<aside class="support"`)
 	require.Contains(t, body, `<h2 id="support">支持這個網站</h2>`)
 	require.Contains(t, body, "贊助換不到任何東西")
-	require.Contains(t, body, `<a href="`+donateURL+`" rel="noopener">到綠界贊助</a>`)
-	require.Less(t, strings.Index(body, "贊助換不到任何東西"), strings.Index(body, donateURL), "the rules come before the link")
+	require.Contains(t, body, `<a href="`+linetemplate.DonateURL+`" rel="noopener">到綠界贊助</a>`)
+	require.Less(t, strings.Index(body, "贊助換不到任何東西"), strings.Index(body, linetemplate.DonateURL), "the rules come before the link")
 	// 綠界信用卡收款審核(2026-11-09):收費資訊與和綠界驗證相同的 Email,完整說明在送審的 jerrytech.me。
 	for _, want := range []string{"每筆最低新台幣 100 元", "7 天內來信", `<a href="https://jerrytech.me/support/">JerryTech 贊助與收費說明</a>`,
 		`<a href="mailto:jerrychuang@jerrytech.me">jerrychuang@jerrytech.me</a>`} {

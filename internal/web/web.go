@@ -35,10 +35,6 @@ const (
 	searchesPerDay    = 100
 	// lineAddURL adds the LINE bot as a friend.
 	lineAddURL = "https://lin.ee/h1GxF9s"
-	// donateURL is the ECPay donation page, shared with 國會在幹嘛 (OD-20). Linked
-	// from the support card above the footer (every page but /about) and from
-	// /about#support, always after the rules.
-	donateURL = "https://p.ecpay.com.tw/6D8D974"
 )
 
 //go:embed templates/*.html
@@ -179,7 +175,7 @@ func (h *Handler) about(w http.ResponseWriter, r *http.Request) {
 			FAQs        any
 			LineURL     string
 			DonateURL   string
-		}{linetemplate.CoverageText, differences, faqs, lineAddURL, donateURL}})
+		}{linetemplate.CoverageText, differences, faqs, lineAddURL, linetemplate.DonateURL}})
 }
 
 // cardLabels are the doctor cards' fixed texts, shared with LINE.
@@ -504,7 +500,7 @@ func mailto(subject string) string {
 
 func render(w http.ResponseWriter, status int, name string, p page) {
 	p.LineURL = lineAddURL
-	p.DonateURL = donateURL
+	p.DonateURL = linetemplate.DonateURL
 	p.RepoURL = repoURL
 	p.HeaderSearch = name != "home"
 	p.OGImage = siteURL + "/og.png"

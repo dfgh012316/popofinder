@@ -9,9 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHelpFlexMessageQuickReply(t *testing.T) {
-	raw, err := HelpFlexMessage()
+// Help and a new follow reply with the usage card, then the support message (OD-21).
+// LINE shows only the last message's quick reply, so the examples ride on the support message.
+func TestHelpMessages(t *testing.T) {
+	msgs, err := HelpMessages()
 	require.NoError(t, err)
+	require.Len(t, msgs, 2)
+	require.NotContains(t, string(msgs[0]), "quickReply")
+	require.Contains(t, string(msgs[1]), DonateURL)
+	require.Less(t, strings.Index(DonateText, "贊助換不到任何東西"), strings.Index(DonateText, DonateURL), "the rules come before the link")
+	raw := msgs[1]
 
 	var got struct {
 		QuickReply struct {

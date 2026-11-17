@@ -204,11 +204,26 @@ var helpQuickReply = []QuickReplyAction{
 	{Label: HospitalListCommand, Text: HospitalListCommand},
 }
 
-// HelpFlexMessage returns the raw JSON for the help usage message with example quick replies.
+// HelpFlexMessage returns the raw JSON for the help usage card, without quick replies.
 func HelpFlexMessage() (json.RawMessage, error) {
-	msg, err := buildFlexMessage("使用說明", helpContents)
+	return buildFlexMessage("使用說明", helpContents)
+}
+
+// HelpMessages is the reply to the help command and to a new follower: the usage card,
+// then the support message (OD-21). LINE only shows the quick reply of the last message,
+// so the example searches ride on the support message.
+func HelpMessages() ([]json.RawMessage, error) {
+	help, err := HelpFlexMessage()
 	if err != nil {
 		return nil, err
 	}
-	return WithQuickReply(msg, helpQuickReply)
+	donate, err := DonateTextMessage()
+	if err != nil {
+		return nil, err
+	}
+	donate, err = WithQuickReply(donate, helpQuickReply)
+	if err != nil {
+		return nil, err
+	}
+	return []json.RawMessage{help, donate}, nil
 }
